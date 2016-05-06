@@ -19,7 +19,7 @@ logger("Connecting to Strava")
 client = Client()
 
 # You need to run the strava_local_client.py script - with your application's ID and secret - to generate the access token.
-access_token = "0649a9c5861f34bbc79410c39f470a130df52da7"
+access_token = "123456789" # replace this with your token
 client.access_token = access_token
 athlete = client.get_athlete()
 logger("Now authenticated for " + athlete.firstname + " " + athlete.lastname)
