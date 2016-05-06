@@ -4,6 +4,7 @@ from requests.exceptions import ConnectionError, HTTPError
 import requests
 import csv
 import shutil
+import time
 import datetime as dt
 from datetime import datetime
 
@@ -64,12 +65,18 @@ def activity_translator(rk_type):
 		return "None"
 	# feel free to extend if you have other activities in your repertoire; Strava activity codes can be found in their API docs 
 
-activity_counter = 0
+
 # We open the cardioactivities CSV file and start reading through it
 with open('cardioActivities.csv', 'rb') as csvfile:
 	activities = csv.reader(csvfile)
+	activity_counter = 0
 	for row in activities:
-		if(row[0] == "Date"):
+		if activity_counter >= 599:
+			time.sleep(900)
+			activity_counter = 0
+		else:
+			pass
+		if row[0] == "Date":
 			pass
 		else:
 			# if there is a gpx file listed, find it and upload it
