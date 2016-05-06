@@ -12,7 +12,7 @@ Borrows liberally from @anthonywu's [Strava API Experiment](https://github.com/a
 5. Next, we need to **get an Authorization Token from Strava** for your Athlete account. Run the command `python strava_local_client.py get_write_token <client_id> <client_secret>`, where you replace `<client_id>` and `<client_secret>` with the codes you pulled from the [Strava API Management Page](https://www.strava.com/settings/api). It should open a browser and ask you to log in to Strava. You should then be shown a code - copy this, and paste it in the `uploader.py` file as the `access_token` variable.
 6. Now we're ready to upload. Run `python uploader.py`, and let it run!
 
-** A few notes on how this works:**
+**A few notes on how this works:**
 - The script will crawl through the cardio activities csv file line for line, uploading each event.
 - Right now it handles runs, rides, walks, swims, hikes and elliptical exercises. You can add more - be sure to grab the RunKeeper definition and the Strava definition and add to the `activity_translator` function.
 - If there is a GPX file listed in the last column, it will look for that file in the directory. If there is no GPX file, it will manually upload using the distance and duration data listed in the spreadsheet.
