@@ -49,8 +49,8 @@ def duration_calc(duration):
 activity_counter = 0
 # We open the cardioactivities CSV file and start reading through it
 with open('cardioActivities.csv', 'rb') as csvfile:
-	runs = csv.reader(csvfile)
-	for row in runs:
+	activities = csv.reader(csvfile)
+	for row in activities:
 		# if there is a gpx file listed, find it and upload it
 		if (".gpx" in row[11] and "Running" in row[1]):
 			gpxfile = row[11]

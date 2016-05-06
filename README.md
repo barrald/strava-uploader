@@ -1,6 +1,8 @@
 # Runkeeper to Strava Uploader
 
-Uses the Strava v3 API (documented [here](http://strava.github.io/api/)) to upload GPX and CSV activities exported from RunKeeper.
+Uses the Strava v3 API (documented [here](http://strava.github.io/api/)) to upload GPX and CSV run activities exported from RunKeeper.
+
+Borrows heavily from @anthonywu's [Strava API Experiment](https://github.com/anthonywu/strava-api-experiment) and @marthinsen's [Strava Upload](https://github.com/marthinsen/stravaupload) projects. 
 
 ## Usage:
 1. First, you need to **register an application with the Strava API service.** Go to the [Strava API Management Page](https://www.strava.com/settings/api), and create a new application. Note the Client ID and Client Secret - you will need them later.
@@ -12,6 +14,7 @@ Uses the Strava v3 API (documented [here](http://strava.github.io/api/)) to uplo
 
 A few notes on what's going to happen:
 - The script will crawl through the cardio activities csv file line for line, uploading each event.
+- Right now it's hard-coded to only upload runs (that's all I do, personally). You will have to change what it looks for in the Runkeeper export and the activity_type uploaded to Strava.
 - If there is a GPX file listed in the last column, it will look for that file in the directory. If there is no GPX file, it will manually upload using the distance and duration data listed in the spreadsheet.
 - It will move successfully uploaded GPX files to a sub-folder called archive.
 - It will try to catch various errors, and ignore duplicate files.
