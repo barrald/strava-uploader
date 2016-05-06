@@ -8,9 +8,9 @@ import datetime as dt
 from datetime import datetime
 
 # Creating a log file and a logging function
-log = open("log.txt","a+")
+now = str(datetime.now())
+log = open("log - " + now + ".txt","a+")
 def logger (message):
-	now = str(datetime.now())
 	log.write(now + " | " + message + "\n")
 	print message
 
@@ -19,7 +19,7 @@ logger("Connecting to Strava")
 client = Client()
 
 # You need to run the strava_local_client.py script - with your application's ID and secret - to generate the access token.
-access_token = "123456789" # replace this with your token
+access_token = "0649a9c5861f34bbc79410c39f470a130df52da7" # replace this with your token
 client.access_token = access_token
 athlete = client.get_athlete()
 logger("Now authenticated for " + athlete.firstname + " " + athlete.lastname)
@@ -93,6 +93,7 @@ with open('cardioActivities.csv', 'rb') as csvfile:
 					exit(1)
 				
 				logger("Uploaded " + gpxfile + " - Activity id: " + str(upResult.id))
+				activity_counter += 1
 
 				shutil.move(gpxfile, archive)
 			else:
@@ -127,10 +128,10 @@ with open('cardioActivities.csv', 'rb') as csvfile:
 						)
 
 					logger("Manually created " + row[0])
+					activity_counter += 1
 
 				except ConnectionError as err:
 					logger("No Internet connection: {}".format(err))
-					exit(1)	
-		activity_counter += 1
+					exit(1)
 
 	logger("Complete! Logged " + str(activity_counter) + " activities.")
