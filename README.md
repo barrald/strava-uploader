@@ -7,8 +7,8 @@ Borrows liberally from @anthonywu's [Strava API Experiment](https://github.com/a
 ## Usage:
 1. First, you need to **register an application with the Strava API service.** Go to the [Strava API Management Page](https://www.strava.com/settings/api), and create a new application. Note the Client ID and Client Secret - you will need them later.
 2. Next, you need to **get your data from Runkeeper.** Go to the Settings page, and look for "Export Data" near the bottom. Define your time range, wait a minute or two, and then click download. Unzip the file - the directory should have .gpx files for all of your GPS-tracked runs, and two spreadsheets - "measurements.csv" and "cardio_activities.csv". 
-3. Open a Terminal window and `cd` to the data directory (should be something like "runkeeper-data-export-1234567")
-4. Install the requirements - `pip install -r requirements.txt`
+3. Open a shell (accessed by using the "Terminal" application on MacOS and `cd` to the data directory (the folder you just downloaded - should be something like "runkeeper-data-export-1234567")
+4. Install the requirements - from any shell run `pip install -r requirements.txt`
 5. Next, we need to **get an Authorization Token from Strava** for your Athlete account. Run the command `python strava_local_client.py get_write_token <client_id> <client_secret>`, where you replace `<client_id>` and `<client_secret>` with the codes you pulled from the [Strava API Management Page](https://www.strava.com/settings/api). It should open a browser and ask you to log in to Strava. You should then be shown a code - copy this, and paste it in the `uploader.py` file as the `access_token` variable.
 6. Now we're ready to upload. Run `python uploader.py`, and let it run!
 
