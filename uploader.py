@@ -72,6 +72,7 @@ def main():
 		activity_counter = 0
 		for row in activities:
 			if activity_counter >= 599:
+				logger("Upload count at 599 - pausing uploads for 15 minutes to avoid rate-limit")
 				time.sleep(900)
 				activity_counter = 0
 			else:
