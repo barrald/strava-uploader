@@ -68,7 +68,7 @@ def main():
 
 	# We open the cardioactivities CSV file and start reading through it
 	with open('cardioActivities.csv', 'rb') as csvfile:
-		activities = csv.reader(csvfile)
+		activities = csv.DictReader(csvfile, skipinitialspace=True)
 		activity_counter = 0
 		for row in activities:
 			if activity_counter >= 599:
@@ -81,9 +81,9 @@ def main():
 				pass
 			else:
 				# if there is a gpx file listed, find it and upload it
-				if ".gpx" in row[11]:
-					gpxfile = row[11]
-					strava_activity_type = activity_translator(str(row[1]))
+				if ".gpx" in row["GPX File"]:
+					gpxfile = row["GPX File"]
+					strava_activity_type = activity_translator(str(row['Type']))
 					if gpxfile in os.listdir('.'):
 						logger("Uploading " + gpxfile)
 						try:
@@ -91,7 +91,7 @@ def main():
 								activity_file = open(gpxfile,'r'),
 								data_type = 'gpx',
 								private = False,
-								description = row[10],
+								description = row['Notes'],
 								activity_type = strava_activity_type
 								)
 						except exc.ActivityUploadFailed as err:
@@ -130,12 +130,12 @@ def main():
 
 				#if no gpx file, upload the data from the CSV
 				else:
-					if row[0] not in log:
-						logger("Manually uploading " + row[0])
-						dur = duration_calc(row[4])
-						dist = float(row[3])*1609.344
-						starttime = datetime.strptime(str(row[0]),"%Y-%m-%d %H:%M:%S")
-						strava_activity_type = activity_translator(str(row[1]))
+					if row['Activity Id'] not in log:
+						logger("Manually uploading " + row['Activity Id'])
+						dur = duration_calc(row['Duration'])
+						dist = float(row['Distance (mi)'])*1609.344
+						starttime = datetime.strptime(str(row['Date']),"%Y-%m-%d %H:%M:%S")
+						strava_activity_type = activity_translator(str(row['Type']))
 
 						# designates part of day for name assignment above, matching Strava convention for GPS activities
 						if 3 <= starttime.hour <= 11:
@@ -153,11 +153,11 @@ def main():
 								start_date_local = starttime,
 								elapsed_time = dur,
 								distance = dist,
-								description = row[10],
+								description = row['Notes'],
 								activity_type = strava_activity_type
 								)
 
-							logger("Manually created " + row[0])
+							logger("Manually created " + row['Activity Id'])
 							activity_counter += 1
 
 						except ConnectionError as err:
@@ -168,4 +168,3 @@ def main():
 
 if __name__ == '__main__':
 	main()
-
