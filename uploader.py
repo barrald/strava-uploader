@@ -28,7 +28,7 @@ def main():
     logger("Now authenticated for " + athlete.firstname + " " + athlete.lastname)
            
     # We open the cardioactivities CSV file and start reading through it
-    with open('../logarun.csv') as csvfile:
+    with open('logarun.csv') as csvfile:
         activities = csv.reader(csvfile)
         activity_counter = 0
         for row in activities:
