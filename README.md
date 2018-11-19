@@ -24,3 +24,17 @@ Borrows liberally from @anthonywu's [Strava API Experiment](https://github.com/a
 ## Misc other notes:
 - Do NOT modify or even save (without modification) the CSV from Excel. Even if you just open it and save it with no modification, Excel changes the date formatting which will break this script. If you do need to modify the CSV for some reason (e.g., mine had a run with a missing distance, not clear why), do it in Sublime or another text editor.
 - I personally ran into a few errors of "malformed GPX files". You can try opening the file in a text editor and looking for issues - look for missing closure tags (e.g., `</trkseg>`) - that was the issue with one of my files. You could also try to use other solutions - some ideas that solved other issues [here](https://support.strava.com/hc/en-us/articles/216942247-How-to-Fix-GPX-File-Errors).
+## Updates specific to this branch
+
+You can use this script to upload a non-Runkeeper file in CSV format.  The current Runkeeper CSV file format includes the following columns: Activity Id, Date,Type, Route Name, Distance (mi), Duration, Average Pace, Average Speed (mph), Calories Burned, Climb (ft), Average Heart Rate (bpm), Friend's Tagged, Notes, GPX File.  If you wish to upload a non-Runkeeper file you have to create a cardioActivities.csv in this folder containing at least the following columns: Activity Id, Date, Type, Distance (mi), Duration.  The non-Runkeeper file must have matching column names to the Runkeeper original!  The GPX file if included should be a filename located in the same folder.
+
+**Some specific information about formatting requirements:**
+- The Activity Id is just an internal identifier that must be unique per activity.  You can use numbers, letters, whatever.
+- Date format must be: YYYY-MM-DD HH:MM:SS.
+- Distance should be decimal formatted in miles.  This is converted to meters for Strava.
+- Duration must be formatted as MM:SS even for times over 1 hour!  So 1 hour 5 minutes 3 seconds = 65:03.  This is converted to total duration in seconds in the duration_calc function if you want to use a different format.
+- Some attribute errors are returned when running this script which seem to be related to missing pieces in the create_activity API call; however, the activity is still successfully uploaded if these errors are received.
+- Pip install requirements only works with versions of pip < 9.0.3.  I did not update the strava_local_client.py file to work with the updated pip as it was very simple to downgrade pip to a workable version.
+- When manually creating an activity (no GPX file), only the following information is saved: Date, Type, Distance (mi), and Duration.  The rest of the file row contents are ignored.
+
+The primary changes from the original branch are updating the CSV file to be read as a dictionary, allowing Runkeeper to change their file format all they want as long as they keep the important column headers the same.  I did this because they added some new columns since the original script was written and it was difficult to figure out what the old file format was, and what updates needed to be made to accomodate the new format.
