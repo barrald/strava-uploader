@@ -28,12 +28,12 @@ CLIENT_SECRET = None
 @app.route("/auth")
 def auth_callback():
     code = request.args.get('code')
-    access_token = API_CLIENT.exchange_code_for_token(
+    token_dictionary = API_CLIENT.exchange_code_for_token(
         client_id=CLIENT_ID,
         client_secret=CLIENT_SECRET,
         code=code
         )
-    return access_token
+    return "Access Token: " + token_dictionary['access_token']
 
 
 if __name__ == '__main__':
