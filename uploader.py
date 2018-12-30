@@ -26,6 +26,8 @@ logger = None
 #####################################
 access_token = None
 
+cardio_file = 'cardioActivities.csv'
+
 def set_up_logger():
 	global logger
 	logger = logging.getLogger(__name__)
@@ -39,6 +41,13 @@ def set_up_logger():
 	logger.addHandler(file_handler)
 	logger.addHandler(std_out_handler)
 	logger.setLevel(logging.DEBUG)
+
+def get_cardio_file():
+	if os.path.isfile(cardio_file):
+		return open(cardio_file)
+
+	logger.error(cardio_file + ' file cannot be found')
+	exit(1)
 
 def get_strava_access_token():
 	global access_token
@@ -62,8 +71,9 @@ def get_strava_client():
     return client
 
 def main():
-
 	set_up_logger()
+
+	cardioFile = get_cardio_file()
 
 	client = get_strava_client()
 
@@ -111,7 +121,7 @@ def main():
 
 
 	# We open the cardioactivities CSV file and start reading through it
-	with open('cardioActivities.csv') as csvfile:
+	with cardioFile as csvfile:
 		activities = csv.DictReader(csvfile)
 		activity_counter = 0
 		for row in activities:
