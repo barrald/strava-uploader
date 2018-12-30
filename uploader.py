@@ -126,6 +126,49 @@ def increment_activity_counter(counter):
 	counter += 1
 	return counter
 
+def upload_gpx(client, gpxfile, strava_activity_type, notes):
+	if not os.path.isfile(gpxfile):
+		logger.warning("No file found for " + gpxfile + "!")
+		return False
+
+	logger.debug("Uploading " + gpxfile)
+	try:
+		upload = client.upload_activity(
+			activity_file = open(gpxfile,'r'),
+			data_type = 'gpx',
+			private = False,
+			description = notes,
+			activity_type = strava_activity_type
+		)
+
+	except exc.ActivityUploadFailed as err:
+		errStr = str(err)
+		# deal with duplicate type of error, if duplicate then continue with next file, else stop
+		if errStr.find('duplicate of activity'):
+			archive_file(gpxfile)
+			logger.debug("Duplicate File " + gpxfile)
+			return True
+		else:
+			logger.error("Another ActivityUploadFailed error: {}".format(err))
+			exit(1)
+
+	except ConnectionError as err:
+		logger.error("No Internet connection: {}".format(err))
+		exit(1)
+
+	logger.info("Upload succeeded.\nWaiting for response...")
+
+	try:
+		upResult = upload.wait()
+	except:
+		logger.error("Problem raised: {}\nExiting...".format(err))
+		exit(1)
+
+	logger.info("Uploaded " + gpxfile + " - Activity id: " + str(upResult.id))
+	archive_file(gpxfile)
+	return True
+
+
 def main():
 	set_up_logger()
 
@@ -141,56 +184,16 @@ def main():
 	with cardioFile as csvfile:
 		activities = csv.DictReader(csvfile)
 		activity_counter = 0
-		for row in activities:
 
+		for row in activities:
 			# if there is a gpx file listed, find it and upload it
 			if ".gpx" in row['GPX File']:
 				gpxfile = row['GPX File']
 				strava_activity_type = activity_translator(str(row['Type']))
-				if gpxfile in os.listdir('.'):
-					logger.debug("Uploading " + gpxfile)
-					try:
-						upload = client.upload_activity(
-							activity_file = open(gpxfile,'r'),
-							data_type = 'gpx',
-							private = False,
-							description = row['Notes'],
-							activity_type = strava_activity_type
-							)
-					except exc.ActivityUploadFailed as err:
-						logger.warning("Uploading problem raised: {}".format(err))
-						errStr = str(err)
-						# deal with duplicate type of error, if duplicate then continue with next file, else stop
-						if errStr.find('duplicate of activity'):
-							archive_file(gpxfile)
-							isDuplicate = True
-							logger.debug("Duplicate File " + gpxfile)
-						else:
-							exit(1)
+				upload_gpx(client, gpxfile, strava_activity_type, row['Notes'])
+				activity_counter = increment_activity_counter(activity_counter)
 
-					except ConnectionError as err:
-						logger.error("No Internet connection: {}".format(err))
-						exit(1)
-
-					logger.info("Upload succeeded.\nWaiting for response...")
-
-					try:
-						upResult = upload.wait()
-					except HTTPError as err:
-						logger.error("Problem raised: {}\nExiting...".format(err))
-						exit(1)
-					except:
-						logger.error("Another problem occured, sorry...")
-						exit(1)
-
-					logger.info("Uploaded " + gpxfile + " - Activity id: " + str(upResult.id))
-					activity_counter = increment_activity_counter(activity_counter)
-
-					archive_file(gpxfile)
-				else:
-					logger.warning("No file found for " + gpxfile + "!")
-
-			#if no gpx file, upload the data from the CSV
+			# if no gpx file, upload the data from the CSV
 			else:
 				if row['Activity Id'] not in log:
 					logger.info("Manually uploading " + row['Activity Id'])
