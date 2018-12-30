@@ -19,7 +19,7 @@ Borrows liberally from @anthonywu's [Strava API Experiment](https://github.com/a
 - Strava's API [rate-limits you to 600 requests every 15 minutes](http://strava.github.io/api/#rate-limiting). The `uploader.py` script will automatically wait for 15 minutes when the upload count hits 599. This is probably too conservative - feel free to adjust.
 - It will move successfully uploaded GPX files to a sub-folder called archive.
 - It will try to catch various errors, and ignore duplicate files.
-- It will log everything in a file `log.txt`.
+- It will log everything in a file `strava-uploader.log`.
 
 ## Misc other notes:
 - Do NOT modify or even save (without modification) the CSV from Excel. Even if you just open it and save it with no modification, Excel changes the date formatting which will break this script. If you do need to modify the CSV for some reason (e.g., mine had a run with a missing distance, not clear why), do it in Sublime or another text editor.
