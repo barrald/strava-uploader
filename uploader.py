@@ -117,6 +117,15 @@ def activity_translator(rk_type):
 
 	return activity_translations[rk_type];
 
+def increment_activity_counter(counter):
+	if counter >= 599:
+		logger.warning("Upload count at 599 - pausing uploads for 15 minutes to avoid rate-limit")
+		time.sleep(900)
+		return 0
+
+	counter += 1
+	return counter
+
 def main():
 	set_up_logger()
 
@@ -133,98 +142,91 @@ def main():
 		activities = csv.DictReader(csvfile)
 		activity_counter = 0
 		for row in activities:
-			if activity_counter >= 599:
-				logger.warning("Upload count at 599 - pausing uploads for 15 minutes to avoid rate-limit")
-				time.sleep(900)
-				activity_counter = 0
-			else:
-				# used to have to check if we were trying to process the header row
-				# no longer necessary when we process as a dictionary
-				
-				# if there is a gpx file listed, find it and upload it
-				if ".gpx" in row['GPX File']:
-					gpxfile = row['GPX File']
-					strava_activity_type = activity_translator(str(row['Type']))
-					if gpxfile in os.listdir('.'):
-						logger.debug("Uploading " + gpxfile)
-						try:
-							upload = client.upload_activity(
-								activity_file = open(gpxfile,'r'),
-								data_type = 'gpx',
-								private = False,
-								description = row['Notes'],
-								activity_type = strava_activity_type
-								)
-						except exc.ActivityUploadFailed as err:
-							logger.warning("Uploading problem raised: {}".format(err))
-							errStr = str(err)
-							# deal with duplicate type of error, if duplicate then continue with next file, else stop
-							if errStr.find('duplicate of activity'):
-								archive_file(gpxfile)
-								isDuplicate = True
-								logger.debug("Duplicate File " + gpxfile)
-							else:
-								exit(1)
 
-						except ConnectionError as err:
-							logger.error("No Internet connection: {}".format(err))
-							exit(1)
-
-						logger.info("Upload succeeded.\nWaiting for response...")
-
-						try:
-							upResult = upload.wait()
-						except HTTPError as err:
-							logger.error("Problem raised: {}\nExiting...".format(err))
-							exit(1)
-						except:
-							logger.error("Another problem occured, sorry...")
-							exit(1)
-						
-						logger.info("Uploaded " + gpxfile + " - Activity id: " + str(upResult.id))
-						activity_counter += 1
-
-						archive_file(gpxfile)
-					else:
-						logger.warning("No file found for " + gpxfile + "!")
-
-				#if no gpx file, upload the data from the CSV
-				else:
-					if row['Activity Id'] not in log:
-						logger.info("Manually uploading " + row['Activity Id'])
-						# convert to total time in seconds
-						dur = duration_calc(row['Duration'])
-						# convert to meters
-						dist = float(row['Distance (mi)'])*1609.344
-						starttime = datetime.strptime(str(row['Date']),"%Y-%m-%d %H:%M:%S")
-						strava_activity_type = activity_translator(str(row['Type']))
-
-						# designates part of day for name assignment above, matching Strava convention for GPS activities
-						if 3 <= starttime.hour <= 11:
-							part = "Morning "
-						elif 12 <= starttime.hour <= 4:
-							part = "Afternoon "
-						elif 5 <= starttime.hour <=7:
-							part = "Evening "
+			# if there is a gpx file listed, find it and upload it
+			if ".gpx" in row['GPX File']:
+				gpxfile = row['GPX File']
+				strava_activity_type = activity_translator(str(row['Type']))
+				if gpxfile in os.listdir('.'):
+					logger.debug("Uploading " + gpxfile)
+					try:
+						upload = client.upload_activity(
+							activity_file = open(gpxfile,'r'),
+							data_type = 'gpx',
+							private = False,
+							description = row['Notes'],
+							activity_type = strava_activity_type
+							)
+					except exc.ActivityUploadFailed as err:
+						logger.warning("Uploading problem raised: {}".format(err))
+						errStr = str(err)
+						# deal with duplicate type of error, if duplicate then continue with next file, else stop
+						if errStr.find('duplicate of activity'):
+							archive_file(gpxfile)
+							isDuplicate = True
+							logger.debug("Duplicate File " + gpxfile)
 						else:
-							part = "Night "
-						
-						try:
-							upload = client.create_activity(
-								name = part + strava_activity_type + " (Manual)",
-								start_date_local = starttime,
-								elapsed_time = dur,
-								distance = dist,
-								description = row['Notes'],
-								activity_type = strava_activity_type
-								)
-								
-							logger.debug("Manually created " + row['Activity Id'])
-							activity_counter += 1
-
-						except ConnectionError as err:
-							logger.error("No Internet connection: {}".format(err))
 							exit(1)
+
+					except ConnectionError as err:
+						logger.error("No Internet connection: {}".format(err))
+						exit(1)
+
+					logger.info("Upload succeeded.\nWaiting for response...")
+
+					try:
+						upResult = upload.wait()
+					except HTTPError as err:
+						logger.error("Problem raised: {}\nExiting...".format(err))
+						exit(1)
+					except:
+						logger.error("Another problem occured, sorry...")
+						exit(1)
+
+					logger.info("Uploaded " + gpxfile + " - Activity id: " + str(upResult.id))
+					activity_counter = increment_activity_counter(activity_counter)
+
+					archive_file(gpxfile)
+				else:
+					logger.warning("No file found for " + gpxfile + "!")
+
+			#if no gpx file, upload the data from the CSV
+			else:
+				if row['Activity Id'] not in log:
+					logger.info("Manually uploading " + row['Activity Id'])
+					# convert to total time in seconds
+					dur = duration_calc(row['Duration'])
+					# convert to meters
+					dist = float(row['Distance (mi)'])*1609.344
+					starttime = datetime.strptime(str(row['Date']),"%Y-%m-%d %H:%M:%S")
+					strava_activity_type = activity_translator(str(row['Type']))
+
+					# designates part of day for name assignment above, matching Strava convention for GPS activities
+					if 3 <= starttime.hour <= 11:
+						part = "Morning "
+					elif 12 <= starttime.hour <= 4:
+						part = "Afternoon "
+					elif 5 <= starttime.hour <=7:
+						part = "Evening "
+					else:
+						part = "Night "
+
+					try:
+						upload = client.create_activity(
+							name = part + strava_activity_type + " (Manual)",
+							start_date_local = starttime,
+							elapsed_time = dur,
+							distance = dist,
+							description = row['Notes'],
+							activity_type = strava_activity_type
+							)
+
+						logger.debug("Manually created " + row['Activity Id'])
+						activity_counter = increment_activity_counter(activity_counter)
+
+					except ConnectionError as err:
+						logger.error("No Internet connection: {}".format(err))
+						exit(1)
 
 		logger.info("Complete! Logged " + str(activity_counter) + " activities.")
 
