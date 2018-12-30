@@ -76,6 +76,10 @@ def archive_file(file):
 	if not os.path.isdir(archive_dir):
 		os.mkdir(archive_dir)
 
+	if os.path.isfile(archive_dir + '/' + file):
+		logger.warning('[' + file + '] already exists in [' + archive_dir +']')
+		return
+
 	logger.info('Backing up [' + file + '] to [' + archive_dir +']')
 	shutil.move(file, archive_dir)
 
