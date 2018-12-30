@@ -30,6 +30,16 @@ cardio_file = 'cardioActivities.csv'
 
 archive_dir = 'archive'
 
+# This list can be expanded
+# https://developers.strava.com/docs/uploads/#upload-an-activity
+activity_translations = {
+	'running': 'run',
+	'cycling': 'ride',
+	'hiking': 'hike',
+	'walking': 'walk',
+	'swimming': 'swim'
+}
+
 def set_up_logger():
 	global logger
 	logger = logging.getLogger(__name__)
@@ -83,6 +93,30 @@ def archive_file(file):
 	logger.info('Backing up [' + file + '] to [' + archive_dir +']')
 	shutil.move(file, archive_dir)
 
+# Function to convert the HH:MM:SS in the Runkeeper CSV to seconds
+def duration_calc(duration):
+	# Splits the duration on the :, so we wind up with a 3-part array
+	split_duration = str(duration).split(":")
+	# If the array only has 2 elements, we know the activity was less than an hour
+	if len(split_duration) == 2:
+		hours = 0
+		minutes = int(split_duration[0])
+		seconds = int(split_duration[1])
+	else:
+		hours = int(split_duration[0])
+		minutes = int(split_duration[1])
+		seconds = int(split_duration[2])
+
+	total_seconds = seconds + (minutes*60) + (hours*60*60)
+	return total_seconds
+
+# Translate RunKeeper's activity codes to Strava's
+def activity_translator(rk_type):
+	# Normalise to lower case
+	rk_type = rk_type.lower()
+
+	return activity_translations[rk_type];
+
 def main():
 	set_up_logger()
 
@@ -93,42 +127,6 @@ def main():
 	logger.debug('Connecting to Strava')
 	athlete = client.get_athlete()
 	logger.info("Now authenticated for " + athlete.firstname + " " + athlete.lastname)
-
-	# Function to convert the HH:MM:SS in the Runkeeper CSV to seconds
-	def duration_calc(duration):
-		# Splits the duration on the :, so we wind up with a 3-part array
-		split_duration = str(duration).split(":")
-		# If the array only has 2 elements, we know the activity was less than an hour
-		if len(split_duration) == 2:
-			hours = 0
-			minutes = int(split_duration[0])
-			seconds = int(split_duration[1])
-		else:
-			hours = int(split_duration[0])
-			minutes = int(split_duration[1])
-			seconds = int(split_duration[2])
-		
-		total_seconds = seconds + (minutes*60) + (hours*60*60)
-		return total_seconds
-
-	# Translate RunKeeper's activity codes to Strava's, could probably be cleverer
-	def activity_translator(rk_type):
-		if rk_type == "Running":
-			return "Run"
-		elif rk_type == "Cycling":
-			return "Ride"
-		elif rk_type == "Hiking":
-			return "Hike"
-		elif rk_type == "Walking":
-			return "Walk"
-		elif rk_type == "Swimming":
-			return "Swim"
-		elif rk_type == "Elliptical":
-			return "Elliptical"
-		else:
-			return "None"
-		# feel free to extend if you have other activities in your repertoire; Strava activity codes can be found in their API docs 
-
 
 	# We open the cardioactivities CSV file and start reading through it
 	with cardioFile as csvfile:
