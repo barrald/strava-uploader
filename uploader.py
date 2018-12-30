@@ -35,6 +35,7 @@ archive_dir = 'archive'
 activity_translations = {
 	'running': 'run',
 	'cycling': 'ride',
+	'mountain biking': 'ride',
 	'hiking': 'hike',
 	'walking': 'walk',
 	'swimming': 'swim'
@@ -132,6 +133,7 @@ def upload_gpx(client, gpxfile, strava_activity_type, notes):
 		return False
 
 	logger.debug("Uploading " + gpxfile)
+
 	try:
 		upload = client.upload_activity(
 			activity_file = open(gpxfile,'r'),
@@ -168,11 +170,54 @@ def upload_gpx(client, gpxfile, strava_activity_type, notes):
 	archive_file(gpxfile)
 	return True
 
+# designates part of day for name assignment, matching Strava convention for GPS activities
+def strava_day_converstion(hour_of_day):
+	if 3 <= hour_of_day <= 11:
+		return "Morning"
+	elif 12 <= hour_of_day <= 4:
+		return "Afternoon"
+	elif 5 <= hour_of_day <=7:
+		return "Evening"
+
+	return "Night"
+
+def create_activity(client, activity_id, duration, distance, start_time, strava_activity_type, notes):
+	# convert to total time in seconds
+	duration = duration_calc(duration)
+
+	day_part = strava_day_converstion(start_time.hour)
+
+	activity_name = day_part + " " + strava_activity_type + " (Manual)"
+
+	logger.info("Manually uploading [" + activity_id + "]:[" + activity_name + "]")
+
+	try:
+		upload = client.create_activity(
+			name = activity_name,
+			start_date_local = start_time,
+			elapsed_time = duration,
+			distance = distance,
+			description = notes,
+			activity_type = strava_activity_type
+		)
+
+		logger.debug("Manually created " + activity_id)
+		return True
+
+	except ConnectionError as err:
+		logger.error("No Internet connection: {}".format(err))
+		exit(1)
+
+def miles_to_meters(miles):
+	return float(miles) * 1609.344
+
+def km_to_meters(km):
+	return float(km) * 1000
 
 def main():
 	set_up_logger()
 
-	cardioFile = get_cardio_file()
+	cardio_file = get_cardio_file()
 
 	client = get_strava_client()
 
@@ -181,57 +226,49 @@ def main():
 	logger.info("Now authenticated for " + athlete.firstname + " " + athlete.lastname)
 
 	# We open the cardioactivities CSV file and start reading through it
-	with cardioFile as csvfile:
+	with cardio_file as csvfile:
 		activities = csv.DictReader(csvfile)
 		activity_counter = 0
+		completed_activities = []
+		distance_convertor = None
+		distance_key = None
+
+		if 'Distance (mi)' in activities.fieldnames:
+			distance_key = 'Distance (mi)'
+			distance_convertor = miles_to_meters
+
+		if 'Distance (km)' in activities.fieldnames:
+			distance_key = 'Distance (km)'
+			distance_convertor = km_to_meters
 
 		for row in activities:
 			# if there is a gpx file listed, find it and upload it
 			if ".gpx" in row['GPX File']:
 				gpxfile = row['GPX File']
 				strava_activity_type = activity_translator(str(row['Type']))
-				upload_gpx(client, gpxfile, strava_activity_type, row['Notes'])
-				activity_counter = increment_activity_counter(activity_counter)
+
+				if upload_gpx(client, gpxfile, strava_activity_type, row['Notes']):
+					activity_counter = increment_activity_counter(activity_counter)
 
 			# if no gpx file, upload the data from the CSV
 			else:
-				if row['Activity Id'] not in log:
-					logger.info("Manually uploading " + row['Activity Id'])
-					# convert to total time in seconds
-					dur = duration_calc(row['Duration'])
-					# convert to meters
-					dist = float(row['Distance (mi)'])*1609.344
-					starttime = datetime.strptime(str(row['Date']),"%Y-%m-%d %H:%M:%S")
+				activity_id = row['Activity Id']
+
+				if activity_id not in completed_activities:
+					duration = row['Duration']
+					distance = distance_convertor(row[distance_key])
+					start_time = datetime.strptime(str(row['Date']), "%Y-%m-%d %H:%M:%S")
 					strava_activity_type = activity_translator(str(row['Type']))
+					notes = row['Notes']
 
-					# designates part of day for name assignment above, matching Strava convention for GPS activities
-					if 3 <= starttime.hour <= 11:
-						part = "Morning "
-					elif 12 <= starttime.hour <= 4:
-						part = "Afternoon "
-					elif 5 <= starttime.hour <=7:
-						part = "Evening "
-					else:
-						part = "Night "
-
-					try:
-						upload = client.create_activity(
-							name = part + strava_activity_type + " (Manual)",
-							start_date_local = starttime,
-							elapsed_time = dur,
-							distance = dist,
-							description = row['Notes'],
-							activity_type = strava_activity_type
-							)
-
-						logger.debug("Manually created " + row['Activity Id'])
+					if create_activity(client, activity_id, duration, distance, start_time, strava_activity_type, notes):
+						completed_activities.append(activity_id)
 						activity_counter = increment_activity_counter(activity_counter)
 
-					except ConnectionError as err:
-						logger.error("No Internet connection: {}".format(err))
-						exit(1)
+				else:
+					logger.warning('Activity [' + activity_id + '] should already be processed')
 
-		logger.info("Complete! Logged " + str(activity_counter) + " activities.")
+		logger.info("Complete! Created approximately [" + str(activity_counter) + "] activities.")
 
 if __name__ == '__main__':
 	main()
