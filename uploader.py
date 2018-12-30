@@ -28,6 +28,8 @@ access_token = None
 
 cardio_file = 'cardioActivities.csv'
 
+archive_dir = 'archive'
+
 def set_up_logger():
 	global logger
 	logger = logging.getLogger(__name__)
@@ -70,6 +72,13 @@ def get_strava_client():
     client.access_token = token
     return client
 
+def archive_file(file):
+	if not os.path.isdir(archive_dir):
+		os.mkdir(archive_dir)
+
+	logger.info('Backing up [' + file + '] to [' + archive_dir +']')
+	shutil.move(file, archive_dir)
+
 def main():
 	set_up_logger()
 
@@ -80,9 +89,6 @@ def main():
 	logger.debug('Connecting to Strava')
 	athlete = client.get_athlete()
 	logger.info("Now authenticated for " + athlete.firstname + " " + athlete.lastname)
-
-	# Creating an archive folder to put uploaded .gpx files
-	archive = "../archive"
 
 	# Function to convert the HH:MM:SS in the Runkeeper CSV to seconds
 	def duration_calc(duration):
@@ -152,8 +158,7 @@ def main():
 							errStr = str(err)
 							# deal with duplicate type of error, if duplicate then continue with next file, else stop
 							if errStr.find('duplicate of activity'):
-								logger.debug("Moving duplicate activity file {}".format(gpxfile))
-								shutil.move(gpxfile,archive)
+								archive_file(gpxfile)
 								isDuplicate = True
 								logger.debug("Duplicate File " + gpxfile)
 							else:
@@ -177,7 +182,7 @@ def main():
 						logger.info("Uploaded " + gpxfile + " - Activity id: " + str(upResult.id))
 						activity_counter += 1
 
-						shutil.move(gpxfile, archive)
+						archive_file(gpxfile)
 					else:
 						logger.warning("No file found for " + gpxfile + "!")
 
