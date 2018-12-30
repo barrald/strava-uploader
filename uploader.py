@@ -14,6 +14,18 @@ import sys
 
 logger = None
 
+#####################################
+# Access Token
+#
+# You need to run the strava_local_client.py script, with your application's ID and secret,
+# to generate the access token.
+#
+# When you have the access token, you can
+#   (a) set an environment variable `STRAVA_UPLOADER_TOKEN` or;
+#   (b) replace `None` below with the token in quote marks, e.g. access_token = 'token'
+#####################################
+access_token = None
+
 def set_up_logger():
 	global logger
 	logger = logging.getLogger(__name__)
@@ -28,17 +40,34 @@ def set_up_logger():
 	logger.addHandler(std_out_handler)
 	logger.setLevel(logging.DEBUG)
 
+def get_strava_access_token():
+	global access_token
+
+	if access_token is not None:
+		logger.info('Found access token')
+		return access_token
+
+	access_token = os.environ.get('STRAVA_UPLOADER_TOKEN')
+	if access_token is not None:
+		logger.info('Found access token')
+		return access_token
+
+	logger.error('Access token not found. Please set the env variable STRAVA_UPLOADER_TOKEN')
+	exit(1)
+
+def get_strava_client():
+    token = get_strava_access_token()
+    client = Client()
+    client.access_token = token
+    return client
+
 def main():
 
 	set_up_logger()
 
-	# Opening the connection to Strava
-	logger.debug("Connecting to Strava")
-	client = Client()
+	client = get_strava_client()
 
-	# You need to run the strava_local_client.py script - with your application's ID and secret - to generate the access token.
-	access_token = "your_token" # replace this with your token
-	client.access_token = access_token
+	logger.debug('Connecting to Strava')
 	athlete = client.get_athlete()
 	logger.info("Now authenticated for " + athlete.firstname + " " + athlete.lastname)
 
