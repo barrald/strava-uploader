@@ -30,7 +30,8 @@ cardio_file = 'cardioActivities.csv'
 archive_dir = 'archive'
 
 # This list can be expanded
-# https://developers.strava.com/docs/uploads/#upload-an-activity
+# @see https://developers.strava.com/docs/uploads/#upload-an-activity
+# @see https://github.com/hozn/stravalib/blob/master/stravalib/model.py#L723
 activity_translations = {
 	'running': 'run',
 	'cycling': 'ride',
