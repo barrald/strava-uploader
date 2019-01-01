@@ -40,3 +40,9 @@ You can use this script to upload a non-Runkeeper file in CSV format.  The curre
 - When manually creating an activity (no GPX file), only the following information is saved: Date, Type, Distance (mi), and Duration.  The rest of the file row contents are ignored.
 
 The primary changes from the original branch are updating the CSV file to be read as a dictionary, allowing Runkeeper to change their file format all they want as long as they keep the important column headers the same.  I did this because they added some new columns since the original script was written and it was difficult to figure out what the old file format was, and what updates needed to be made to accomodate the new format.
+
+## Running tests
+```
+cd tests
+PYTHONPATH=..:$PYTHONPATH python -m unittest test_get_date_range
+```

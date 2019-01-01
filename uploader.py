@@ -7,8 +7,7 @@ import requests
 import csv
 import shutil
 import time
-import datetime as dt
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import sys
 
@@ -181,6 +180,33 @@ def strava_day_converstion(hour_of_day):
 
 	return "Night"
 
+# Get a small range of time. Note runkeeper does not maintain timezone
+# in the CSV, so we must get about 12 hours earlier and later to account
+# for potential miss due to UTC
+def get_date_range(time, hourBuffer=12):
+	if type(time) is not datetime:
+		raise TypeError('time arg must be a datetime, not a %s' % type(time))
+
+
+	return {
+		'from': time + timedelta(hours = -1 * hourBuffer),
+		'to': time + timedelta(hours = hourBuffer),
+	}
+
+def activity_exists(client, activity_name, start_time):
+	date_range = get_date_range(start_time)
+
+	activities = client.get_activities(
+		before = date_range['from'],
+		after = date_range['to']
+	)
+
+	for activity in activities:
+		if activity.name == activity_name:
+			return True
+
+	return False
+
 def create_activity(client, activity_id, duration, distance, start_time, strava_activity_type, notes):
 	# convert to total time in seconds
 	duration = duration_calc(duration)
@@ -188,6 +214,11 @@ def create_activity(client, activity_id, duration, distance, start_time, strava_
 	day_part = strava_day_converstion(start_time.hour)
 
 	activity_name = day_part + " " + strava_activity_type + " (Manual)"
+
+	# Check to ensure the manual activity has not already been created
+	if activity_exists(client, activity_name, start_time):
+		logger.warning('Activity [' + activity_name + '] already created, skipping')
+		return
 
 	logger.info("Manually uploading [" + activity_id + "]:[" + activity_name + "]")
 
