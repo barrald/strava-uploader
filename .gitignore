@@ -1,5 +1,6 @@
 strava-uploader.log
 .idea
 archive
-cardioActivities.csv
+*.csv
 *.pyc
+*.gpx
