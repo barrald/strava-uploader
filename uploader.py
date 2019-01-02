@@ -197,9 +197,11 @@ def get_date_range(time, hourBuffer=12):
 def activity_exists(client, activity_name, start_time):
 	date_range = get_date_range(start_time)
 
+	logger.debug("Getting existing activities from [" + date_range['from'].isoformat() + "] to [" + date_range['to'].isoformat() + "]")
+
 	activities = client.get_activities(
-		before = date_range['from'],
-		after = date_range['to']
+		before = date_range['to'],
+		after = date_range['from']
 	)
 
 	for activity in activities:
