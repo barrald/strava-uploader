@@ -1,1 +1,6 @@
-log.txt
+strava-uploader.log
+.idea
+archive
+*.csv
+*.pyc
+*.gpx

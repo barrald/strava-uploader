@@ -6,11 +6,13 @@ Borrows liberally from @anthonywu's [Strava API Experiment](https://github.com/a
 
 ## Usage:
 1. First, you need to **register an application with the Strava API service.** Go to the [Strava API Management Page](https://www.strava.com/settings/api), and create a new application. Note the Client ID and Client Secret - you will need them later.
-2. Next, you need to **get your data from Runkeeper.** Go to the Settings page, and look for "Export Data" near the bottom. Define your time range, wait a minute or two, and then click download. Unzip the file - the directory should have .gpx files for all of your GPS-tracked runs, and two spreadsheets - "measurements.csv" and "cardio_activities.csv". 
-3. Open a shell (accessed by using the "Terminal" application on MacOS) and `cd` to the data directory (the folder you just downloaded - should be something like "runkeeper-data-export-1234567")
-4. Install the requirements - from any shell run `pip install -r requirements.txt`
-5. Next, we need to **get an Authorization Token from Strava** for your Athlete account. Run the command `python strava_local_client.py get_write_token <client_id> <client_secret>`, where you replace `<client_id>` and `<client_secret>` with the codes you pulled from the [Strava API Management Page](https://www.strava.com/settings/api). It should open a browser and ask you to log in to Strava. You should then be shown a code - copy this, and paste it in the `uploader.py` file as the `access_token` variable.
-6. Now we're ready to upload. Run `python uploader.py`, and let it run!
+1. Next, you need to **get your data from Runkeeper.** Go to the Settings page, and look for "Export Data" near the bottom. Define your time range, wait a minute or two, and then click download. Unzip the file - the directory should have .gpx files for all of your GPS-tracked runs, and two spreadsheets - "measurements.csv" and "cardio_activities.csv". 
+1. Open a shell (accessed by using the "Terminal" application on MacOS) and `cd` to the data directory (the folder you just downloaded - should be something like "runkeeper-data-export-1234567")
+1. Install the requirements - from any shell run `pip install -r requirements.txt`
+1. Next, we need to **get an Authorization Token from Strava** for your Athlete account. Run the command `python strava_local_client.py get_write_token <client_id> <client_secret>`, where you replace `<client_id>` and `<client_secret>` with the codes you pulled from the [Strava API Management Page](https://www.strava.com/settings/api). It should open a browser and ask you to log in to Strava. You should then be shown a code - copy this, and either:
+	1. (Preferably) Set the environment variable `STRAVA_UPLOADER_TOKEN` before running `uploader.py`, e.g. `STRAVA_UPLOADER_TOKEN=my_token ./uploader.py`
+	1. Or paste it in the `uploader.py` file as the `access_token` variable, replacing `None`. Don't forget to quote the variable, e.g. `access_token = "my_token"`
+1. Now we're ready to upload. Run `STRAVA_UPLOADER_TOKEN=my_token ./uploader.py`, and let it run!
 
 **A few notes on how this works:**
 - The script will crawl through the cardio activities csv file line for line, uploading each event.
@@ -19,7 +21,7 @@ Borrows liberally from @anthonywu's [Strava API Experiment](https://github.com/a
 - Strava's API [rate-limits you to 600 requests every 15 minutes](http://strava.github.io/api/#rate-limiting). The `uploader.py` script will automatically wait for 15 minutes when the upload count hits 599. This is probably too conservative - feel free to adjust.
 - It will move successfully uploaded GPX files to a sub-folder called archive.
 - It will try to catch various errors, and ignore duplicate files.
-- It will log everything in a file `log.txt`.
+- It will log everything in a file `strava-uploader.log`.
 
 ## Misc other notes:
 - Do NOT modify or even save (without modification) the CSV from Excel. Even if you just open it and save it with no modification, Excel changes the date formatting which will break this script. If you do need to modify the CSV for some reason (e.g., mine had a run with a missing distance, not clear why), do it in Sublime or another text editor.
@@ -38,3 +40,9 @@ You can use this script to upload a non-Runkeeper file in CSV format.  The curre
 - When manually creating an activity (no GPX file), only the following information is saved: Date, Type, Distance (mi), and Duration.  The rest of the file row contents are ignored.
 
 The primary changes from the original branch are updating the CSV file to be read as a dictionary, allowing Runkeeper to change their file format all they want as long as they keep the important column headers the same.  I did this because they added some new columns since the original script was written and it was difficult to figure out what the old file format was, and what updates needed to be made to accomodate the new format.
+
+## Running tests
+```
+cd tests
+PYTHONPATH=..:$PYTHONPATH python -m unittest test_get_date_range
+```

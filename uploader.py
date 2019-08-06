@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import os
 from stravalib import Client, exc, model
 from requests.exceptions import ConnectionError, HTTPError
@@ -5,168 +7,302 @@ import requests
 import csv
 import shutil
 import time
-import datetime as dt
-from datetime import datetime
+from datetime import datetime, timedelta
+import logging
+import sys
+
+logger = None
+
+#####################################
+# Access Token
+#
+# You need to run the strava_local_client.py script, with your application's ID and secret,
+# to generate the access token.
+#
+# When you have the access token, you can
+#   (a) set an environment variable `STRAVA_UPLOADER_TOKEN` or;
+#   (b) replace `None` below with the token in quote marks, e.g. access_token = 'token'
+#####################################
+access_token = None
+
+cardio_file = 'cardioActivities.csv'
+
+archive_dir = 'archive'
+
+# This list can be expanded
+# @see https://developers.strava.com/docs/uploads/#upload-an-activity
+# @see https://github.com/hozn/stravalib/blob/master/stravalib/model.py#L723
+activity_translations = {
+	'running': 'run',
+	'cycling': 'ride',
+	'mountain biking': 'ride',
+	'hiking': 'hike',
+	'walking': 'walk',
+	'swimming': 'swim'
+}
+
+def set_up_logger():
+	global logger
+	logger = logging.getLogger(__name__)
+	formatter = logging.Formatter('[%(asctime)s] [%(levelname)s]:%(message)s')
+	std_out_handler = logging.StreamHandler(sys.stdout)
+	std_out_handler.setLevel(logging.DEBUG)
+	std_out_handler.setFormatter(formatter)
+	file_handler = logging.FileHandler('strava-uploader.log')
+	file_handler.setLevel(logging.DEBUG)
+	file_handler.setFormatter(formatter)
+	logger.addHandler(file_handler)
+	logger.addHandler(std_out_handler)
+	logger.setLevel(logging.DEBUG)
+
+def get_cardio_file():
+	if os.path.isfile(cardio_file):
+		return open(cardio_file)
+
+	logger.error(cardio_file + ' file cannot be found')
+	exit(1)
+
+def get_strava_access_token():
+	global access_token
+
+	if access_token is not None:
+		logger.info('Found access token')
+		return access_token
+
+	access_token = os.environ.get('STRAVA_UPLOADER_TOKEN')
+	if access_token is not None:
+		logger.info('Found access token')
+		return access_token
+
+	logger.error('Access token not found. Please set the env variable STRAVA_UPLOADER_TOKEN')
+	exit(1)
+
+def get_strava_client():
+    token = get_strava_access_token()
+    client = Client()
+    client.access_token = token
+    return client
+
+def archive_file(file):
+	if not os.path.isdir(archive_dir):
+		os.mkdir(archive_dir)
+
+	if os.path.isfile(archive_dir + '/' + file):
+		logger.warning('[' + file + '] already exists in [' + archive_dir +']')
+		return
+
+	logger.info('Backing up [' + file + '] to [' + archive_dir +']')
+	shutil.move(file, archive_dir)
+
+# Function to convert the HH:MM:SS in the Runkeeper CSV to seconds
+def duration_calc(duration):
+	# Splits the duration on the :, so we wind up with a 3-part array
+	split_duration = str(duration).split(":")
+	# If the array only has 2 elements, we know the activity was less than an hour
+	if len(split_duration) == 2:
+		hours = 0
+		minutes = int(split_duration[0])
+		seconds = int(split_duration[1])
+	else:
+		hours = int(split_duration[0])
+		minutes = int(split_duration[1])
+		seconds = int(split_duration[2])
+
+	total_seconds = seconds + (minutes*60) + (hours*60*60)
+	return total_seconds
+
+# Translate RunKeeper's activity codes to Strava's
+def activity_translator(rk_type):
+	# Normalise to lower case
+	rk_type = rk_type.lower()
+
+	return activity_translations[rk_type];
+
+def increment_activity_counter(counter):
+	if counter >= 599:
+		logger.warning("Upload count at 599 - pausing uploads for 15 minutes to avoid rate-limit")
+		time.sleep(900)
+		return 0
+
+	counter += 1
+	return counter
+
+def upload_gpx(client, gpxfile, strava_activity_type, notes):
+	if not os.path.isfile(gpxfile):
+		logger.warning("No file found for " + gpxfile + "!")
+		return False
+
+	logger.debug("Uploading " + gpxfile)
+
+	try:
+		upload = client.upload_activity(
+			activity_file = open(gpxfile,'r'),
+			data_type = 'gpx',
+			private = False,
+			description = notes,
+			activity_type = strava_activity_type
+		)
+
+	except exc.ActivityUploadFailed as err:
+		errStr = str(err)
+		# deal with duplicate type of error, if duplicate then continue with next file, else stop
+		if errStr.find('duplicate of activity'):
+			archive_file(gpxfile)
+			logger.debug("Duplicate File " + gpxfile)
+			return True
+		else:
+			logger.error("Another ActivityUploadFailed error: {}".format(err))
+			exit(1)
+
+	except ConnectionError as err:
+		logger.error("No Internet connection: {}".format(err))
+		exit(1)
+
+	logger.info("Upload succeeded.\nWaiting for response...")
+
+	try:
+		upResult = upload.wait()
+	except:
+		logger.error("Problem raised: {}\nExiting...".format(err))
+		exit(1)
+
+	logger.info("Uploaded " + gpxfile + " - Activity id: " + str(upResult.id))
+	archive_file(gpxfile)
+	return True
+
+# designates part of day for name assignment, matching Strava convention for GPS activities
+def strava_day_converstion(hour_of_day):
+	if 3 <= hour_of_day <= 11:
+		return "Morning"
+	elif 12 <= hour_of_day <= 4:
+		return "Afternoon"
+	elif 5 <= hour_of_day <=7:
+		return "Evening"
+
+	return "Night"
+
+# Get a small range of time. Note runkeeper does not maintain timezone
+# in the CSV, so we must get about 12 hours earlier and later to account
+# for potential miss due to UTC
+def get_date_range(time, hourBuffer=12):
+	if type(time) is not datetime:
+		raise TypeError('time arg must be a datetime, not a %s' % type(time))
+
+
+	return {
+		'from': time + timedelta(hours = -1 * hourBuffer),
+		'to': time + timedelta(hours = hourBuffer),
+	}
+
+def activity_exists(client, activity_name, start_time):
+	date_range = get_date_range(start_time)
+
+	logger.debug("Getting existing activities from [" + date_range['from'].isoformat() + "] to [" + date_range['to'].isoformat() + "]")
+
+	activities = client.get_activities(
+		before = date_range['to'],
+		after = date_range['from']
+	)
+
+	for activity in activities:
+		if activity.name == activity_name:
+			return True
+
+	return False
+
+def create_activity(client, activity_id, duration, distance, start_time, strava_activity_type, notes):
+	# convert to total time in seconds
+	duration = duration_calc(duration)
+
+	day_part = strava_day_converstion(start_time.hour)
+
+	activity_name = day_part + " " + strava_activity_type + " (Manual)"
+
+	# Check to ensure the manual activity has not already been created
+	if activity_exists(client, activity_name, start_time):
+		logger.warning('Activity [' + activity_name + '] already created, skipping')
+		return
+
+	logger.info("Manually uploading [" + activity_id + "]:[" + activity_name + "]")
+
+	try:
+		upload = client.create_activity(
+			name = activity_name,
+			start_date_local = start_time,
+			elapsed_time = duration,
+			distance = distance,
+			description = notes,
+			activity_type = strava_activity_type
+		)
+
+		logger.debug("Manually created " + activity_id)
+		return True
+
+	except ConnectionError as err:
+		logger.error("No Internet connection: {}".format(err))
+		exit(1)
+
+def miles_to_meters(miles):
+	return float(miles) * 1609.344
+
+def km_to_meters(km):
+	return float(km) * 1000
 
 def main():
+	set_up_logger()
 
-	# Creating a log file and a logging function
-	log = open("log.txt","a+")
-	now = str(datetime.now())
-	def logger (message):
-		log.write(now + " | " + message + "\n")
-		print (message)
+	cardio_file = get_cardio_file()
 
-	# Opening the connection to Strava
-	logger("Connecting to Strava")
-	client = Client()
+	client = get_strava_client()
 
-	# You need to run the strava_local_client.py script - with your application's ID and secret - to generate the access token.
-	access_token = "your_token" # replace this with your token
-	client.access_token = access_token
+	logger.debug('Connecting to Strava')
 	athlete = client.get_athlete()
-	logger("Now authenticated for " + athlete.firstname + " " + athlete.lastname)
-
-	# Creating an archive folder to put uploaded .gpx files
-	archive = "../archive"
-
-	# Function to convert the HH:MM:SS in the Runkeeper CSV to seconds
-	def duration_calc(duration):
-		# Splits the duration on the :, so we wind up with a 3-part array
-		split_duration = str(duration).split(":")
-		# If the array only has 2 elements, we know the activity was less than an hour
-		if len(split_duration) == 2:
-			hours = 0
-			minutes = int(split_duration[0])
-			seconds = int(split_duration[1])
-		else:
-			hours = int(split_duration[0])
-			minutes = int(split_duration[1])
-			seconds = int(split_duration[2])
-		
-		total_seconds = seconds + (minutes*60) + (hours*60*60)
-		return total_seconds
-
-	# Translate RunKeeper's activity codes to Strava's, could probably be cleverer
-	def activity_translator(rk_type):
-		if rk_type == "Running":
-			return "Run"
-		elif rk_type == "Cycling":
-			return "Ride"
-		elif rk_type == "Hiking":
-			return "Hike"
-		elif rk_type == "Walking":
-			return "Walk"
-		elif rk_type == "Swimming":
-			return "Swim"
-		elif rk_type == "Elliptical":
-			return "Elliptical"
-		else:
-			return "None"
-		# feel free to extend if you have other activities in your repertoire; Strava activity codes can be found in their API docs 
-
+	logger.info("Now authenticated for " + athlete.firstname + " " + athlete.lastname)
 
 	# We open the cardioactivities CSV file and start reading through it
-	with open('cardioActivities.csv') as csvfile:
+	with cardio_file as csvfile:
 		activities = csv.DictReader(csvfile)
 		activity_counter = 0
+		completed_activities = []
+		distance_convertor = None
+		distance_key = None
+
+		if 'Distance (mi)' in activities.fieldnames:
+			distance_key = 'Distance (mi)'
+			distance_convertor = miles_to_meters
+
+		if 'Distance (km)' in activities.fieldnames:
+			distance_key = 'Distance (km)'
+			distance_convertor = km_to_meters
+
 		for row in activities:
-			if activity_counter >= 599:
-				logger("Upload count at 599 - pausing uploads for 15 minutes to avoid rate-limit")
-				time.sleep(900)
-				activity_counter = 0
+			# if there is a gpx file listed, find it and upload it
+			if ".gpx" in row['GPX File']:
+				gpxfile = row['GPX File']
+				strava_activity_type = activity_translator(str(row['Type']))
+
+				if upload_gpx(client, gpxfile, strava_activity_type, row['Notes']):
+					activity_counter = increment_activity_counter(activity_counter)
+
+			# if no gpx file, upload the data from the CSV
 			else:
-				# used to have to check if we were trying to process the header row
-				# no longer necessary when we process as a dictionary
-				
-				# if there is a gpx file listed, find it and upload it
-				if ".gpx" in row['GPX File']:
-					gpxfile = row['GPX File']
+				activity_id = row['Activity Id']
+
+				if activity_id not in completed_activities:
+					duration = row['Duration']
+					distance = distance_convertor(row[distance_key])
+					start_time = datetime.strptime(str(row['Date']), "%Y-%m-%d %H:%M:%S")
 					strava_activity_type = activity_translator(str(row['Type']))
-					if gpxfile in os.listdir('.'):
-						logger("Uploading " + gpxfile)
-						try:
-							upload = client.upload_activity(
-								activity_file = open(gpxfile,'r'),
-								data_type = 'gpx',
-								private = False,
-								description = row['Notes'],
-								activity_type = strava_activity_type
-								)
-						except exc.ActivityUploadFailed as err:
-							logger("Uploading problem raised: {}".format(err))
-							errStr = str(err)
-							# deal with duplicate type of error, if duplicate then continue with next file, else stop
-							if errStr.find('duplicate of activity'):
-								logger("Moving duplicate activity file {}".format(gpxfile))
-								shutil.move(gpxfile,archive)
-								isDuplicate = True
-								logger("Duplicate File " + gpxfile)
-							else:
-								exit(1)
+					notes = row['Notes']
 
-						except ConnectionError as err:
-							logger("No Internet connection: {}".format(err))
-							exit(1)
+					if create_activity(client, activity_id, duration, distance, start_time, strava_activity_type, notes):
+						completed_activities.append(activity_id)
+						activity_counter = increment_activity_counter(activity_counter)
 
-						logger("Upload succeeded.\nWaiting for response...")
-
-						try:
-							upResult = upload.wait()
-						except HTTPError as err:
-							logger("Problem raised: {}\nExiting...".format(err))
-							exit(1)
-						except:
-							logger("Another problem occured, sorry...")
-							exit(1)
-						
-						logger("Uploaded " + gpxfile + " - Activity id: " + str(upResult.id))
-						activity_counter += 1
-
-						shutil.move(gpxfile, archive)
-					else:
-						logger("No file found for " + gpxfile + "!")
-
-				#if no gpx file, upload the data from the CSV
 				else:
-					if row['Activity Id'] not in log:
-						logger("Manually uploading " + row['Activity Id'])
-						# convert to total time in seconds
-						dur = duration_calc(row['Duration'])
-						# convert to meters
-						dist = float(row['Distance (mi)'])*1609.344
-						starttime = datetime.strptime(str(row['Date']),"%Y-%m-%d %H:%M:%S")
-						strava_activity_type = activity_translator(str(row['Type']))
+					logger.warning('Activity [' + activity_id + '] should already be processed')
 
-						# designates part of day for name assignment above, matching Strava convention for GPS activities
-						if 3 <= starttime.hour <= 11:
-							part = "Morning "
-						elif 12 <= starttime.hour <= 4:
-							part = "Afternoon "
-						elif 5 <= starttime.hour <=7:
-							part = "Evening "
-						else:
-							part = "Night "
-						
-						try:
-							upload = client.create_activity(
-								name = part + strava_activity_type + " (Manual)",
-								start_date_local = starttime,
-								elapsed_time = dur,
-								distance = dist,
-								description = row['Notes'],
-								activity_type = strava_activity_type
-								)
-								
-							logger("Manually created " + row['Activity Id'])
-							activity_counter += 1
-
-						except ConnectionError as err:
-							logger("No Internet connection: {}".format(err))
-							exit(1)
-
-		logger("Complete! Logged " + str(activity_counter) + " activities.")
+		logger.info("Complete! Created approximately [" + str(activity_counter) + "] activities.")
 
 if __name__ == '__main__':
 	main()
-
