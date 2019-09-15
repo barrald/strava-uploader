@@ -33,7 +33,7 @@ def auth_callback():
         client_secret=CLIENT_SECRET,
         code=code
         )
-    return access_token
+    return access_token['access_token']
 
 
 if __name__ == '__main__':
@@ -48,7 +48,7 @@ if __name__ == '__main__':
         auth_url = API_CLIENT.authorization_url(
             client_id=args['<client_id>'],
             redirect_uri='http://127.0.0.1:{port}/auth'.format(port=args['--port']),
-            scope='view_private,write',
+            scope=['activity:write','activity:read_all','profile:read_all','profile:write','read_all'],
             state='from_cli'
             )
         if sys.platform == 'darwin':
