@@ -28,6 +28,7 @@ access_token = None
 cardio_file = 'cardioActivities.csv'
 
 archive_dir = 'archive'
+skip_dir = 'skipped'
 
 # This list can be expanded
 # @see https://developers.strava.com/docs/uploads/#upload-an-activity
@@ -94,6 +95,13 @@ def archive_file(file):
 	logger.info('Backing up [' + file + '] to [' + archive_dir +']')
 	shutil.move(file, archive_dir)
 
+def skip_file(file):
+	if not os.path.isdir(skip_dir):
+		os.mkdir(skip_dir)
+
+	logger.info('Skipping [' + file + '], moving to [' + skip +']')
+	shutil.move(file, skip_dir)
+
 # Function to convert the HH:MM:SS in the Runkeeper CSV to seconds
 def duration_calc(duration):
 	# Splits the duration on the :, so we wind up with a 3-part array
@@ -116,7 +124,10 @@ def activity_translator(rk_type):
 	# Normalise to lower case
 	rk_type = rk_type.lower()
 
-	return activity_translations[rk_type];
+	if rk_type not in activity_translations:
+		return None
+
+	return activity_translations[rk_type]
 
 def increment_activity_counter(counter):
 	if counter >= 599:
@@ -281,8 +292,12 @@ def main():
 				gpxfile = row['GPX File']
 				strava_activity_type = activity_translator(str(row['Type']))
 
-				if upload_gpx(client, gpxfile, strava_activity_type, row['Notes']):
-					activity_counter = increment_activity_counter(activity_counter)
+				if strava_activity_type is not None:
+					if upload_gpx(client, gpxfile, strava_activity_type, row['Notes']):
+						activity_counter = increment_activity_counter(activity_counter)
+				else:
+					logger.info('Invalid activity type ' + str(row['Type']) + ', skipping file ' + gpxfile)
+					skip_file(gpxfile)
 
 			# if no gpx file, upload the data from the CSV
 			else:
@@ -295,9 +310,12 @@ def main():
 					strava_activity_type = activity_translator(str(row['Type']))
 					notes = row['Notes']
 
-					if create_activity(client, activity_id, duration, distance, start_time, strava_activity_type, notes):
-						completed_activities.append(activity_id)
-						activity_counter = increment_activity_counter(activity_counter)
+					if strava_activity_type is not None:
+						if create_activity(client, activity_id, duration, distance, start_time, strava_activity_type, notes):
+							completed_activities.append(activity_id)
+							activity_counter = increment_activity_counter(activity_counter)
+					else:
+						logger.info('Invalid activity type ' + str(row['Type']) + ', skipping')
 
 				else:
 					logger.warning('Activity [' + activity_id + '] should already be processed')
