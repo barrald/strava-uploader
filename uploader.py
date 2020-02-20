@@ -174,7 +174,10 @@ def upload_gpx(client, gpxfile, strava_activity_type, notes):
 	try:
 		upResult = upload.wait()
 	except:
-		logger.error("Problem raised: {}\nExiting...".format(err))
+		try:
+			logger.error("Problem raised: {}\nExiting...".format(err))
+		except:
+			logger.error("Problem raised: An error that was not specified, sorry\nExiting...")
 		exit(1)
 
 	logger.info("Uploaded " + gpxfile + " - Activity id: " + str(upResult.id))
