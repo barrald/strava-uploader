@@ -99,7 +99,7 @@ def skip_file(file):
 	if not os.path.isdir(skip_dir):
 		os.mkdir(skip_dir)
 
-	logger.info('Skipping [' + file + '], moving to [' + skip +']')
+	logger.info('Skipping [' + file + '], moving to [' + skip_dir +']')
 	shutil.move(file, skip_dir)
 
 # Function to convert the HH:MM:SS in the Runkeeper CSV to seconds
