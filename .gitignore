@@ -4,3 +4,4 @@ archive
 *.csv
 *.pyc
 *.gpx
+venv
