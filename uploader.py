@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
 import os
-from stravalib import Client, exc, model
-from requests.exceptions import ConnectionError, HTTPError
-import requests
+from stravalib import Client, exc
+from stravalib.util.limiter import RateLimiter, XRateLimitRule
+from requests.exceptions import ConnectionError
 import csv
 import shutil
 import time
@@ -79,10 +79,20 @@ def get_strava_access_token():
 	exit(1)
 
 def get_strava_client():
-    token = get_strava_access_token()
-    client = Client()
-    client.access_token = token
-    return client
+	token = get_strava_access_token()
+	rate_limiter = RateLimiter()
+	rate_limiter.rules.append(XRateLimitRule(
+			{'short': {'usageFieldIndex': 0, 'usage': 0,
+						 # 60s * 15 = 15 min
+						 'limit': 100, 'time': (60*15),
+						 'lastExceeded': None,},
+			 'long': {'usageFieldIndex': 1, 'usage': 0,
+						# 60s * 60m * 24 = 1 day
+						'limit': 1000, 'time': (60*60*24),
+						'lastExceeded': None}}))
+	client = Client(rate_limiter=rate_limiter)
+	client.access_token = token
+	return client
 
 def archive_file(file):
 	if not os.path.isdir(archive_dir):
@@ -130,11 +140,6 @@ def activity_translator(rk_type):
 	return activity_translations[rk_type]
 
 def increment_activity_counter(counter):
-	if counter >= 599:
-		logger.warning("Upload count at 599 - pausing uploads for 15 minutes to avoid rate-limit")
-		time.sleep(900)
-		return 0
-
 	counter += 1
 	return counter
 
@@ -145,40 +150,59 @@ def upload_gpx(client, gpxfile, strava_activity_type, notes):
 
 	logger.debug("Uploading " + gpxfile)
 
-	try:
-		upload = client.upload_activity(
-			activity_file = open(gpxfile,'r'),
-			data_type = 'gpx',
-			private = False,
-			description = notes,
-			activity_type = strava_activity_type
-		)
-
-	except exc.ActivityUploadFailed as err:
-		errStr = str(err)
-		# deal with duplicate type of error, if duplicate then continue with next file, else stop
-		if errStr.find('duplicate of activity'):
-			archive_file(gpxfile)
-			logger.debug("Duplicate File " + gpxfile)
-			return True
-		else:
-			logger.error("Another ActivityUploadFailed error: {}".format(err))
+	for i in range(2):
+		try:
+			upload = client.upload_activity(
+				activity_file = open(gpxfile,'r'),
+				data_type = 'gpx',
+				private = False,
+				description = notes,
+				activity_type = strava_activity_type
+			)
+		except exc.RateLimitExceeded as err:
+			if i > 0:
+				logger.error("Daily Rate limit exceeded - exiting program")
+				exit(1)
+			logger.warning("Rate limit exceeded in uploading - pausing uploads for 15 minutes to avoid rate-limit")
+			time.sleep(900)
+			continue
+		except ConnectionError as err:
+			logger.error("No Internet connection: {}".format(err))
 			exit(1)
-
-	except ConnectionError as err:
-		logger.error("No Internet connection: {}".format(err))
-		exit(1)
+		break
 
 	logger.info("Upload succeeded.\nWaiting for response...")
 
-	try:
-		upResult = upload.wait()
-	except:
+	for i in range(2):
 		try:
-			logger.error("Problem raised: {}\nExiting...".format(err))
-		except:
-			logger.error("Problem raised: An error that was not specified, sorry\nExiting...")
-		exit(1)
+			upResult = upload.wait()
+
+		# catch RateLimitExceeded and retry after 15 minutes
+		except exc.RateLimitExceeded as err:
+			if i > 0:
+				logger.error("Daily Rate limit exceeded - exiting program")
+				exit(1)
+			logger.warning(
+				"Rate limit exceeded in processing upload - pausing uploads for 15 minutes to avoid rate-limit")
+			time.sleep(900)
+			continue
+		except exc.ActivityUploadFailed as err:
+			errStr = str(err)
+			# deal with duplicate type of error, if duplicate then continue with next file, else stop
+			if errStr.find('duplicate of activity'):
+				archive_file(gpxfile)
+				logger.debug("Duplicate File " + gpxfile)
+				return True
+			else:
+				logger.error("Another ActivityUploadFailed error: {}".format(err))
+				exit(1)
+		except Exception as err:
+			try:
+				logger.error("Problem raised: {}\nExiting...".format(err))
+			except:
+				logger.error("Problem raised: An error that was not specified, sorry\nExiting...")
+			exit(1)
+		break
 
 	logger.info("Uploaded " + gpxfile + " - Activity id: " + str(upResult.id))
 	archive_file(gpxfile)
@@ -270,7 +294,18 @@ def main():
 	client = get_strava_client()
 
 	logger.debug('Connecting to Strava')
-	athlete = client.get_athlete()
+	for i in range(2):
+		try:
+			athlete = client.get_athlete()
+		except exc.RateLimitExceeded as err:
+			if i > 0:
+				logger.error("Daily Rate limit exceeded - exiting program")
+				exit(1)
+			logger.warning("Rate limit exceeded in connecting - Retrying strava connection in 15 minutes")
+			time.sleep(900)
+			continue
+		break
+
 	logger.info("Now authenticated for " + athlete.firstname + " " + athlete.lastname)
 
 	# We open the cardioactivities CSV file and start reading through it
