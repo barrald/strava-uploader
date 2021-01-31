@@ -9,19 +9,18 @@ Borrows liberally from @anthonywu's [Strava API Experiment](https://github.com/a
 1. **Get data from Runkeeper**<br>Next, you need to **get your data from Runkeeper.** Go to the Settings page, and look for "Export Data" near the bottom. Define your time range, wait a minute or two, and then click download. Unzip the file - the directory should have .gpx files for all of your GPS-tracked runs, and two spreadsheets - "measurements.csv" and "cardio_activities.csv".
 1. **Navigate to folder**<br>Open a shell (accessed by using the "Terminal" application on MacOS) and `cd` to the data directory (the folder you just downloaded - should be something like "runkeeper-data-export-1234567").
 1. **Install requirements**<br>Install the requirements - from any shell run `pip install -r requirements.txt`
-1. **Get authorization from Strava**<br>Next, we need to **get an Authorization Token from Strava** for your Athlete account. Run the command `python strava_local_client.py get_write_token <client_id> <client_secret>` where you replace `<client_id>` and `<client_secret>` with the codes you pulled from the [Strava API Management Page](https://www.strava.com/settings/api). It should open a browser and ask you to log in to Strava. You should then be shown a code - copy this, and either:
-	1. (Preferably) Set the environment variable `STRAVA_UPLOADER_TOKEN` before running `uploader.py`, e.g. `STRAVA_UPLOADER_TOKEN=my_token ./uploader.py`
-	1. Or paste it in the `uploader.py` file as the `access_token` variable, replacing `None`. Don't forget to quote the variable, e.g. `access_token = "my_token"`
-1. **Upload to Strava**<br>Now we're ready to upload. Run `STRAVA_UPLOADER_TOKEN=my_token ./uploader.py` and let it run!
+1. **Get authorization from Strava**<br>Next, we need to **get an Authorization Token from Strava** for your Athlete account. Run the command `python strava_local_client.py get_write_token <client_id> <client_secret>` where you replace `<client_id>` and `<client_secret>` with the codes you pulled from the [Strava API Management Page](https://www.strava.com/settings/api). It should open a browser and ask you to log in to Strava. You should then be shown a code, which is automatically saved with other data in a file called 'tokens.txt' in the current directory. This is used in the next step.
+1. **Upload to Strava**<br>Now we're ready to upload. Run `./uploader.py` and let it run! Make sure 'tokens.txt' is in the current directory.
 
 **A few notes on how this works:**
 - The script will crawl through the cardio activities csv file line for line, uploading each event.
 - Right now it handles runs, rides, walks, swims, hikes and elliptical exercises. You can add more - be sure to grab the RunKeeper definition and the Strava definition and add to the `activity_translator` function.
 - If there is a GPX file listed in the last column, it will look for that file in the directory. If there is no GPX file, it will manually upload using the distance and duration data listed in the spreadsheet.
-- Strava's API [rate-limits you to 600 requests every 15 minutes](https://www.strava.com/settings/api). The `uploader.py` script will automatically wait for 15 minutes when the upload count hits 599. This is probably too conservative - feel free to adjust. ***From May 2020 onwards**, newly created applications have a limit of 100 requests every 15 minutes.*
+- Strava's API [rate-limits you to 600 requests every 15 minutes](https://www.strava.com/settings/api). The `uploader.py` script will automatically wait for 15 minutes when the upload count hits 599. This is probably too conservative - feel free to adjust. ***From May 2020 onwards**, newly created applications have a limit of 100 requests every 15 minutes.
 - It will move successfully uploaded GPX files to a sub-folder called archive.
 - It will try to catch various errors, and ignore duplicate files.
 - It will log everything in a file `strava-uploader.log`.
+- If the program quits because it hit the daily upload limit, you can simply run `./uploader.py` again the next day (perhaps as a cron job) to continue. Needed tokens are refreshed and stored in the 'tokens.txt' file.
 
 ## Misc other notes:
 - Do NOT modify or even save (without modification) the CSV from Excel. Even if you just open it and save it with no modification, Excel changes the date formatting which will break this script. If you do need to modify the CSV for some reason (e.g., mine had a run with a missing distance, not clear why), do it in Sublime or another text editor.
