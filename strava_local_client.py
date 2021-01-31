@@ -16,6 +16,7 @@ Options:
 
 import stravalib
 from flask import Flask, request
+import os
 
 app = Flask(__name__)
 
@@ -25,6 +26,8 @@ API_CLIENT = stravalib.Client()
 CLIENT_ID = None
 CLIENT_SECRET = None
 
+TOKEN_FILE = "tokens.txt"
+
 @app.route("/auth")
 def auth_callback():
     code = request.args.get('code')
@@ -32,9 +35,19 @@ def auth_callback():
         client_id=CLIENT_ID,
         client_secret=CLIENT_SECRET,
         code=code
-        )
-    return access_token['access_token']
+    )
 
+    if os.path.isfile(TOKEN_FILE):
+        os.rename(TOKEN_FILE, TOKEN_FILE + '.bak')
+
+    with open(TOKEN_FILE, 'w') as output:
+        output.write('client' + '\t' + CLIENT_ID + '\n')
+        output.write('secret' + '\t' + CLIENT_SECRET + '\n')
+        output.write('refresh' + '\t' + access_token['refresh_token'] + '\n')
+        output.write('access' + '\t' + access_token['access_token'] + '\n')
+        output.write('expiry' + '\t' + str(access_token['expires_at']) + '\n')
+
+    return access_token['access_token']
 
 if __name__ == '__main__':
     import docopt
