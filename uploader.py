@@ -386,7 +386,7 @@ def main():
 			# if there is a gpx file listed, find it and upload it
 			if ".gpx" in row['GPX File']:
 				gpxfile = row['GPX File']
-				strava_activity_type = row['Type'] #activity_translator(str(row['Type']))
+				strava_activity_type = activity_translator(str(row['Type']))
 
 				if strava_activity_type is not None:
 					if upload_gpx(client, gpxfile, strava_activity_type, row['Notes']):
