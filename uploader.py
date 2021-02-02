@@ -116,7 +116,7 @@ def get_strava_access_token(client):
 
 	client.tokens = tokens
 
-	if time.time() > client.token_expires_at:
+	if int(time.time()) > client.token_expires_at:
 		client = refresh_strava_access_tokens(client)
 
 	return client
@@ -329,20 +329,15 @@ def km_to_meters(km):
 	return float(km) * 1000
 
 def wait_for_timeout(client):
-	sleeptime = 900 - (int(time.time()) - wait_for_timeout.last_timeout)
-	if sleeptime < 60:
-		sleeptime = 60
+	sleeptime = 15 # minutes
 
-	logger.warning("Rate limit exceeded - pausing transactions for " + str(sleeptime) + " seconds to avoid rate-limit")
-	time.sleep(sleeptime)
+	logger.warning("Rate limit exceeded - pausing transactions for " + str(sleeptime) + " minutes to avoid rate-limit")
+	time.sleep(sleeptime*60)
 
-	wait_for_timeout.last_timeout = int(time.time())
-
-	if time.time() > client.token_expires_at:
+	if int(time.time()) > client.token_expires_at:
 		client = refresh_strava_access_tokens(client)
 
 	return client
-wait_for_timeout.last_timeout = int(time.time()) # ugh... track calls above
 
 def main():
 	set_up_logger()
