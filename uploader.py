@@ -17,15 +17,10 @@ logger = None
 # Access Token
 #
 # You need to run the strava_local_client.py script, with your application's ID and secret,
-# to generate the access token.
-#
-# When you have the access token, you can
-#   (a) set an environment variable `STRAVA_UPLOADER_TOKEN` or;
-#   (b) replace `None` below with the token in quote marks, e.g. access_token = 'token'
+# to generate the access and other tokens in the following token_file.
 #####################################
-access_token = None
-
 cardio_file = 'cardioActivities.csv'
+token_file = 'tokens.txt'
 
 archive_dir = 'archive'
 skip_dir = 'skipped'
@@ -63,35 +58,85 @@ def get_cardio_file():
 	logger.error(cardio_file + ' file cannot be found')
 	exit(1)
 
-def get_strava_access_token():
-	global access_token
+def write_strava_access_tokens(tokens):
+	if os.path.isfile(token_file):
+		os.rename(token_file, token_file + '.bak')
 
-	if access_token is not None:
-		logger.info('Found access token')
-		return access_token
+	with open(token_file, 'w') as output:
+		for key, value in tokens.items():
+			output.write(key + '\t' + str(value) + '\n')
 
-	access_token = os.environ.get('STRAVA_UPLOADER_TOKEN')
-	if access_token is not None:
-		logger.info('Found access token')
-		return access_token
 
-	logger.error('Access token not found. Please set the env variable STRAVA_UPLOADER_TOKEN')
-	exit(1)
+def refresh_strava_access_tokens(client):
+	logger.info('Refreshing Strava access tokens')
+
+	tokens = client.tokens
+
+	refresh_response = client.refresh_access_token(
+		client_id=tokens['client'],
+		client_secret=tokens['secret'],
+		refresh_token=tokens['refresh'])
+
+	tokens['access'] = refresh_response['access_token'] # this is a short-lived access token
+	tokens['refresh'] = refresh_response['refresh_token']
+	tokens['expiry'] = refresh_response['expires_at']
+
+	client.access_token = tokens['access']
+	client.token_expires_at = int(tokens['expiry']) - 20*60 # update 20 mins before actual expiry
+
+	write_strava_access_tokens(tokens)
+
+	logger.info('Refreshed Strava access token expires at local time ' + time.asctime(time.localtime(tokens['expiry'])))
+
+	client.tokens = tokens
+	return client
+
+
+def get_strava_access_token(client):
+
+	tokens = dict()
+
+	if os.path.isfile(token_file):
+		with open(token_file, "r") as token_input:
+			for linein in token_input:
+				line = linein.split()
+				token = line[0].casefold()
+				tokens[token] = line[1]
+
+	if 'client' not in tokens or 'secret' not in tokens or 'refresh' not in tokens:
+		logger.info('Need client, secret and refresh tokens in the ' + token_file + ' file')
+		exit(1)
+
+	if 'access' in tokens:
+		client.access_token = tokens['access']
+	if 'expiry' in tokens:
+		client.token_expires_at = int(tokens['expiry']) - 20*60 # update 20 mins before actual expiry
+	else:
+		client.token_expires_at = 0 # force refrech
+
+	client.tokens = tokens
+
+	if int(time.time()) > client.token_expires_at:
+		client = refresh_strava_access_tokens(client)
+
+	return client
 
 def get_strava_client():
-	token = get_strava_access_token()
+
 	rate_limiter = RateLimiter()
 	rate_limiter.rules.append(XRateLimitRule(
 			{'short': {'usageFieldIndex': 0, 'usage': 0,
 						 # 60s * 15 = 15 min
-						 'limit': 100, 'time': (60*15),
-						 'lastExceeded': None,},
+						 'limit': 100, 'time': (60 * 15),
+						 'lastExceeded': None, },
 			 'long': {'usageFieldIndex': 1, 'usage': 0,
 						# 60s * 60m * 24 = 1 day
-						'limit': 1000, 'time': (60*60*24),
+						'limit': 1000, 'time': (60 * 60 * 24),
 						'lastExceeded': None}}))
+
 	client = Client(rate_limiter=rate_limiter)
-	client.access_token = token
+	client = get_strava_access_token(client)
+
 	return client
 
 def archive_file(file):
@@ -163,8 +208,7 @@ def upload_gpx(client, gpxfile, strava_activity_type, notes):
 			if i > 0:
 				logger.error("Daily Rate limit exceeded - exiting program")
 				exit(1)
-			logger.warning("Rate limit exceeded in uploading - pausing uploads for 15 minutes to avoid rate-limit")
-			time.sleep(900)
+			wait_for_timeout(client)
 			continue
 		except ConnectionError as err:
 			logger.error("No Internet connection: {}".format(err))
@@ -182,9 +226,7 @@ def upload_gpx(client, gpxfile, strava_activity_type, notes):
 			if i > 0:
 				logger.error("Daily Rate limit exceeded - exiting program")
 				exit(1)
-			logger.warning(
-				"Rate limit exceeded in processing upload - pausing uploads for 15 minutes to avoid rate-limit")
-			time.sleep(900)
+			wait_for_timeout(client)
 			continue
 		except exc.ActivityUploadFailed as err:
 			errStr = str(err)
@@ -286,6 +328,17 @@ def miles_to_meters(miles):
 def km_to_meters(km):
 	return float(km) * 1000
 
+def wait_for_timeout(client):
+	sleeptime = 15 # minutes
+
+	logger.warning("Rate limit exceeded - pausing transactions for " + str(sleeptime) + " minutes to avoid rate-limit")
+	time.sleep(sleeptime*60)
+
+	if int(time.time()) > client.token_expires_at:
+		client = refresh_strava_access_tokens(client)
+
+	return client
+
 def main():
 	set_up_logger()
 
@@ -301,8 +354,7 @@ def main():
 			if i > 0:
 				logger.error("Daily Rate limit exceeded - exiting program")
 				exit(1)
-			logger.warning("Rate limit exceeded in connecting - Retrying strava connection in 15 minutes")
-			time.sleep(900)
+			wait_for_timeout(client)
 			continue
 		break
 
