@@ -39,7 +39,13 @@ activity_translations = {
 	'mountain biking': 'ride',
 	'hiking': 'hike',
 	'walking': 'walk',
-	'swimming': 'swim'
+	'swimming': 'swim',
+	'circuit training': 'workout',
+	'elliptical': 'elliptical',
+	'other': 'workout',
+	'pilates': 'workout',
+	'rowing': 'rowing',
+	'strength training': 'weighttraining'
 }
 
 def set_up_logger():
