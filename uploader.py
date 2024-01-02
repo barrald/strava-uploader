@@ -13,6 +13,9 @@ from datetime import datetime, timedelta
 import logging
 import sys
 
+FIFTEEN_MINUTES = 60 * 15
+ONE_DAY = 60 * 60 * 24
+
 #####################################
 # Access Token
 #
@@ -88,11 +91,11 @@ def get_strava_client():
     rate_limiter.rules.append(XRateLimitRule(
         {'short': {'usageFieldIndex': 0, 'usage': 0,
                    # 60s * 15 = 15 min
-                   'limit': 100, 'time': (60 * 15),
+                   'limit': 100, 'time': FIFTEEN_MINUTES,
                    'lastExceeded': None, },
          'long': {'usageFieldIndex': 1, 'usage': 0,
                   # 60s * 60m * 24 = 1 day
-                  'limit': 1000, 'time': (60 * 60 * 24),
+                  'limit': 1000, 'time': ONE_DAY,
                   'lastExceeded': None}}))
     client = Client(rate_limiter=rate_limiter)
     client.access_token = token
@@ -197,9 +200,9 @@ def upload_gpx(client, gpxfile, strava_activity_type, notes):
             time.sleep(900)
             continue
         except exc.ActivityUploadFailed as err:
-            errStr = str(err)
+            err_str = str(err)
             # deal with duplicate type of error, if duplicate then continue with next file, else stop
-            if errStr.find('duplicate of activity'):
+            if err_str.find('duplicate of activity'):
                 archive_file(gpxfile)
                 logger.debug("Duplicate File %s", gpxfile)
                 return True
