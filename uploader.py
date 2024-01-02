@@ -48,6 +48,15 @@ activity_translations = {
 this = sys.modules[__name__]
 logger: logging.Logger = None
 
+class Conversion:
+    @staticmethod
+    def miles_to_meters(miles):
+        return float(miles) * 1609.344
+
+    @staticmethod
+    def km_to_meters(km):
+        return float(km) * 1000
+
 
 def set_up_logger():
     if this.logger is None:
@@ -298,12 +307,7 @@ def create_activity(client, activity_id, duration, distance, start_time, strava_
         exit(1)
 
 
-def miles_to_meters(miles):
-    return float(miles) * 1609.344
 
-
-def km_to_meters(km):
-    return float(km) * 1000
 
 
 def main():
@@ -334,16 +338,16 @@ def main():
         activities = csv.DictReader(csvfile)
         activity_counter = 0
         completed_activities = []
-        distance_convertor = None
+        distance_converter = None
         distance_key = None
 
         if 'Distance (mi)' in activities.fieldnames:
             distance_key = 'Distance (mi)'
-            distance_convertor = miles_to_meters
+            distance_converter = Conversion.miles_to_meters
 
         if 'Distance (km)' in activities.fieldnames:
             distance_key = 'Distance (km)'
-            distance_convertor = km_to_meters
+            distance_converter = Conversion.km_to_meters
 
         for row in activities:
             # if there is a gpx file listed, find it and upload it
@@ -366,7 +370,7 @@ def main():
 
                 if activity_id not in completed_activities:
                     duration = row['Duration']
-                    distance = distance_convertor(row[distance_key])
+                    distance = distance_converter(row[distance_key])
                     start_time = datetime.strptime(str(row['Date']), "%Y-%m-%d %H:%M:%S")
                     strava_activity_type = activity_translator(act_type)
                     notes = row['Notes']
