@@ -194,11 +194,38 @@ class StravaClientUtils:
         return None
 
 
+class DistanceMode:
+    def __init__(self, d_key, d_converter):
+        self.key = d_key
+        self.converter = d_converter
+
+    def convert_distance(self, row):
+        return self.converter(row[self.key])
+
+    @staticmethod
+    def from_csv_header(fieldnames):
+        distance_converter = None
+        distance_key = None
+
+        if 'Distance (mi)' in fieldnames:
+            distance_key = 'Distance (mi)'
+            distance_converter = Conversion.miles_to_meters
+
+        if 'Distance (km)' in fieldnames:
+            distance_key = 'Distance (km)'
+            distance_converter = Conversion.km_to_meters
+
+        return DistanceMode(distance_key, distance_converter)
+
+
 class RunkeeperToStravaImporter:
     def __init__(self):
         Setup.set_up_env_vars()
         Setup.set_up_logger()
         self.client = StravaClientUtils.get_client()
+        self.activity_counter = 0
+        self.completed_activities = set()
+        self.distance_mode = None
 
 
     def run(self):
@@ -222,18 +249,7 @@ class RunkeeperToStravaImporter:
         # We open the cardioactivities CSV file and start reading through it
         with cardio_file as csvfile:
             activities = csv.DictReader(csvfile)
-            activity_counter = 0
-            completed_activities = set()
-            distance_converter = None
-            distance_key = None
-
-            if 'Distance (mi)' in activities.fieldnames:
-                distance_key = 'Distance (mi)'
-                distance_converter = Conversion.miles_to_meters
-
-            if 'Distance (km)' in activities.fieldnames:
-                distance_key = 'Distance (km)'
-                distance_converter = Conversion.km_to_meters
+            self.distance_mode = DistanceMode.from_csv_header(activities.fieldnames)
 
             for row in activities:
                 # if there is a gpx file listed, find it and upload it
@@ -244,7 +260,7 @@ class RunkeeperToStravaImporter:
 
                     if strava_activity_type is not None:
                         if self.upload_gpx(gpx_file, strava_activity_type, row['Notes']):
-                            activity_counter += 1
+                            self.activity_counter += 1
                     else:
                         logger.info('Invalid activity type %s, skipping file ', act_type, gpx_file)
                         FileUtils.skip_file(gpx_file)
@@ -253,25 +269,25 @@ class RunkeeperToStravaImporter:
                 else:
                     activity_id = row['Activity Id']
 
-                    if activity_id not in completed_activities:
+                    if activity_id not in self.completed_activities:
                         duration = row['Duration']
-                        distance = distance_converter(row[distance_key])
+                        distance = self.distance_mode.convert_distance(row)
                         start_time = datetime.strptime(str(row['Date']), "%Y-%m-%d %H:%M:%S")
                         strava_activity_type = self.activity_translator(act_type)
                         notes = row['Notes']
 
                         if strava_activity_type is not None:
-                            if self.create_activity(client, activity_id, duration, distance, start_time, strava_activity_type,
+                            if self.create_activity(activity_id, duration, distance, start_time, strava_activity_type,
                                                     notes):
-                                completed_activities.add(activity_id)
-                                activity_counter += 1
+                                self.completed_activities.add(activity_id)
+                                self.activity_counter += 1
                         else:
                             logger.info('Invalid activity type %s, skipping', act_type)
 
                     else:
                         logger.warning('Activity [%s] should already be processed', activity_id)
     
-            logger.info("Complete! Created approximately [%s] activities.", str(activity_counter))
+            logger.info("Complete! Created approximately [%s] activities.", self.activity_counter)
 
     def upload_gpx(self, gpxfile, strava_activity_type, notes):
         if not os.path.isfile(os.path.join(DATA_ROOT_DIR, gpxfile)):
@@ -338,7 +354,7 @@ class RunkeeperToStravaImporter:
         FileUtils.archive_file(gpxfile)
         return True
 
-    def create_activity(self, client, activity_id, duration, distance, start_time, strava_activity_type, notes):
+    def create_activity(self, activity_id, duration, distance, start_time, strava_activity_type, notes):
         # convert to total time in seconds
         duration = Conversion.duration_calc(duration)
         day_part = Conversion.strava_day_conversion(start_time.hour)
@@ -346,14 +362,14 @@ class RunkeeperToStravaImporter:
         activity_name = day_part + " " + strava_activity_type + " (Manual)"
 
         # Check to ensure the manual activity has not already been created
-        if self.activity_exists(client, activity_name, start_time):
+        if self.activity_exists(activity_name, start_time):
             logger.warning('Activity [%s] already created, skipping', activity_name)
             return
 
         logger.info("Manually uploading [%s]:[%s]", activity_id, activity_name)
 
         try:
-            upload = client.create_activity(
+            upload = self.client.create_activity(
                 name=activity_name,
                 start_date_local=start_time,
                 elapsed_time=duration,
@@ -369,14 +385,13 @@ class RunkeeperToStravaImporter:
             logger.error("No Internet connection: {}".format(err))
             exit(1)
 
-    @staticmethod
-    def activity_exists(client, activity_name, start_time):
+    def activity_exists(self, activity_name, start_time):
         date_range = get_date_range(start_time)
 
         logger.debug("Getting existing activities from [%s] to [%s]", date_range['from'].isoformat(), date_range[
             'to'].isoformat())
 
-        activities = client.get_activities(
+        activities = self.client.get_activities(
             before=date_range['to'],
             after=date_range['from']
         )
