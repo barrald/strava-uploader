@@ -218,6 +218,26 @@ class DistanceMode:
         return DistanceMode(distance_key, distance_converter)
 
 
+def rate_limited(retries=2, sleep=900):
+    def deco_retry(f):
+        def f_retry(*args, **kwargs):
+            for i in range(retries):
+                try:
+                    if f.__func__:
+                        # staticmethod or classmethod
+                        return f.__func__(*args, **kwargs)
+                    else:
+                        return f(*args, **kwargs)
+                except exc.RateLimitExceeded:
+                    if i > 0:
+                        logger.error("Daily Rate limit exceeded - exiting program")
+                        exit(1)
+                    logger.warning("Rate limit exceeded in connecting - Retrying strava connection in %d seconds", sleep)
+                    time.sleep(sleep)
+        return f_retry  # true decorator
+    return deco_retry
+
+
 class RunkeeperToStravaImporter:
     def __init__(self):
         Setup.set_up_env_vars()
@@ -227,26 +247,33 @@ class RunkeeperToStravaImporter:
         self.completed_activities = set()
         self.distance_mode = None
 
+    @rate_limited()
+    def _get_athlete(self):
+        return self.client.get_athlete()
+
+    @rate_limited()
+    def _upload_activity(self, gpx_file, notes, activity_type):
+        upload = self.client.upload_activity(
+            activity_file=open(gpx_file, 'r'),
+            data_type='gpx',
+            private=False,
+            description=notes,
+            activity_type=activity_type
+        )
+        return upload
+
+    @rate_limited()
+    def _wait_for_upload(self, upload):
+        up_result = upload.wait()
+        return up_result
 
     def run(self):
-        cardio_file = FileUtils.get_cardio_file()
-
         logger.debug('Connecting to Strava')
-        for i in range(2):
-            try:
-                athlete = self.client.get_athlete()
-            except exc.RateLimitExceeded:
-                if i > 0:
-                    logger.error("Daily Rate limit exceeded - exiting program")
-                    exit(1)
-                logger.warning("Rate limit exceeded in connecting - Retrying strava connection in 15 minutes")
-                time.sleep(900)
-                continue
-            break
-
+        athlete = self._get_athlete()
         logger.info("Now authenticated for %s %s", athlete.firstname, athlete.lastname)
 
         # We open the cardioactivities CSV file and start reading through it
+        cardio_file = FileUtils.get_cardio_file()
         with cardio_file as csvfile:
             activities = csv.DictReader(csvfile)
             self.distance_mode = DistanceMode.from_csv_header(activities.fieldnames)
@@ -295,60 +322,26 @@ class RunkeeperToStravaImporter:
             return False
 
         logger.debug("Uploading %s", gpxfile)
-
-        for i in range(2):
-            try:
-                upload = self.client.upload_activity(
-                    activity_file=open(gpxfile, 'r'),
-                    data_type='gpx',
-                    private=False,
-                    description=notes,
-                    activity_type=strava_activity_type
-                )
-            except exc.RateLimitExceeded:
-                if i > 0:
-                    logger.error("Daily Rate limit exceeded - exiting program")
-                    exit(1)
-                logger.warning("Rate limit exceeded in uploading - pausing uploads for 15 minutes to avoid rate-limit")
-                time.sleep(900)
-                continue
-            except ConnectionError as err:
-                logger.error("No Internet connection: {}".format(err))
-                exit(1)
-            break
-
+        upload = self._upload_activity(gpxfile, notes, strava_activity_type)
         logger.info("Upload succeeded. Waiting for response...")
 
-        for i in range(2):
-            try:
-                up_result = upload.wait()
-
-            # catch RateLimitExceeded and retry after 15 minutes
-            except exc.RateLimitExceeded as err:
-                if i > 0:
-                    logger.error("Daily Rate limit exceeded - exiting program")
-                    exit(1)
-                logger.warning(
-                    "Rate limit exceeded in processing upload - pausing uploads for 15 minutes to avoid rate-limit")
-                time.sleep(900)
-                continue
-            except exc.ActivityUploadFailed as err:
-                err_str = str(err)
-                # deal with duplicate type of error, if duplicate then continue with next file, else stop
-                if err_str.find('duplicate of activity'):
-                    FileUtils.archive_file(gpxfile)
-                    logger.debug("Duplicate File %s", gpxfile)
-                    return True
-                else:
-                    logger.error("Another ActivityUploadFailed error: {}".format(err))
-                    exit(1)
-            except Exception as err:
-                try:
-                    logger.error("Exception raised: {}\nExiting...".format(err))
-                except:
-                    logger.error("Exception raised: An error that was not specified, sorry\nExiting...")
+        try:
+            up_result = self._wait_for_upload(upload)
+        except exc.ActivityUploadFailed as err:
+            # deal with duplicate type of error, if duplicate then continue with next file, stop otherwise
+            if str(err).find('duplicate of activity'):
+                FileUtils.archive_file(gpxfile)
+                logger.debug("Duplicate File %s", gpxfile)
+                return True
+            else:
+                logger.error("Another ActivityUploadFailed error: {}".format(err))
                 exit(1)
-            break
+        except Exception as err:
+            try:
+                logger.error("Exception raised: {}. Exiting...".format(err))
+            except:
+                logger.error("Unexpected exception. Exiting...")
+            exit(1)
 
         logger.info("Uploaded %s - Activity id: %s", gpxfile, str(up_result.id))
         FileUtils.archive_file(gpxfile)
@@ -358,7 +351,6 @@ class RunkeeperToStravaImporter:
         # convert to total time in seconds
         duration = Conversion.duration_calc(duration)
         day_part = Conversion.strava_day_conversion(start_time.hour)
-
         activity_name = day_part + " " + strava_activity_type + " (Manual)"
 
         # Check to ensure the manual activity has not already been created
