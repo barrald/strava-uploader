@@ -348,18 +348,17 @@ def main():
 
         for row in activities:
             # if there is a gpx file listed, find it and upload it
-            act_type = str(row['Type'])
-            gpx_file = row['GPX File']
             if ".gpx" in gpx_file:
-                gpxfile = gpx_file
+                gpx_file = row['GPX File']
+                act_type = str(row['Type'])
                 strava_activity_type = activity_translator(act_type)
 
                 if strava_activity_type is not None:
-                    if upload_gpx(client, gpxfile, strava_activity_type, row['Notes']):
+                    if upload_gpx(client, gpx_file, strava_activity_type, row['Notes']):
                         activity_counter += 1
                 else:
-                    logger.info('Invalid activity type %s, skipping file ', act_type, gpxfile)
-                    skip_file(gpxfile)
+                    logger.info('Invalid activity type %s, skipping file ', act_type, gpx_file)
+                    skip_file(gpx_file)
 
             # if no gpx file, upload the data from the CSV
             else:
