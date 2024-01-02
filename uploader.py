@@ -177,7 +177,7 @@ def upload_gpx(client, gpxfile, strava_activity_type, notes):
                 description=notes,
                 activity_type=strava_activity_type
             )
-        except exc.RateLimitExceeded as err:
+        except exc.RateLimitExceeded:
             if i > 0:
                 logger.error("Daily Rate limit exceeded - exiting program")
                 exit(1)
@@ -193,7 +193,7 @@ def upload_gpx(client, gpxfile, strava_activity_type, notes):
 
     for i in range(2):
         try:
-            upResult = upload.wait()
+            up_result = upload.wait()
 
         # catch RateLimitExceeded and retry after 15 minutes
         except exc.RateLimitExceeded as err:
@@ -222,13 +222,13 @@ def upload_gpx(client, gpxfile, strava_activity_type, notes):
             exit(1)
         break
 
-    logger.info("Uploaded " + gpxfile + " - Activity id: " + str(upResult.id))
+    logger.info("Uploaded " + gpxfile + " - Activity id: " + str(up_result.id))
     archive_file(gpxfile)
     return True
 
 
 # designates part of day for name assignment, matching Strava convention for GPS activities
-def strava_day_converstion(hour_of_day):
+def strava_day_conversion(hour_of_day):
     if 3 <= hour_of_day <= 11:
         return "Morning"
     elif 12 <= hour_of_day <= 4:
@@ -242,13 +242,13 @@ def strava_day_converstion(hour_of_day):
 # Get a small range of time. Note runkeeper does not maintain timezone
 # in the CSV, so we must get about 12 hours earlier and later to account
 # for potential miss due to UTC
-def get_date_range(time, hourBuffer=12):
+def get_date_range(time, hour_buffer=12):
     if type(time) is not datetime:
         raise TypeError('time arg must be a datetime, not a %s' % type(time))
 
     return {
-        'from': time + timedelta(hours=-1 * hourBuffer),
-        'to': time + timedelta(hours=hourBuffer),
+        'from': time + timedelta(hours=-1 * hour_buffer),
+        'to': time + timedelta(hours=hour_buffer),
     }
 
 
@@ -274,7 +274,7 @@ def create_activity(client, activity_id, duration, distance, start_time, strava_
     # convert to total time in seconds
     duration = duration_calc(duration)
 
-    day_part = strava_day_converstion(start_time.hour)
+    day_part = strava_day_conversion(start_time.hour)
 
     activity_name = day_part + " " + strava_activity_type + " (Manual)"
 
@@ -323,7 +323,7 @@ def main():
     for i in range(2):
         try:
             athlete = client.get_athlete()
-        except exc.RateLimitExceeded as err:
+        except exc.RateLimitExceeded:
             if i > 0:
                 logger.error("Daily Rate limit exceeded - exiting program")
                 exit(1)
@@ -352,15 +352,17 @@ def main():
 
         for row in activities:
             # if there is a gpx file listed, find it and upload it
-            if ".gpx" in row['GPX File']:
-                gpxfile = row['GPX File']
-                strava_activity_type = activity_translator(str(row['Type']))
+            act_type = str(row['Type'])
+            gpx_file = row['GPX File']
+            if ".gpx" in gpx_file:
+                gpxfile = gpx_file
+                strava_activity_type = activity_translator(act_type)
 
                 if strava_activity_type is not None:
                     if upload_gpx(client, gpxfile, strava_activity_type, row['Notes']):
                         activity_counter = increment_activity_counter(activity_counter)
                 else:
-                    logger.info('Invalid activity type ' + str(row['Type']) + ', skipping file ' + gpxfile)
+                    logger.info('Invalid activity type ' + act_type + ', skipping file ' + gpxfile)
                     skip_file(gpxfile)
 
             # if no gpx file, upload the data from the CSV
@@ -371,7 +373,7 @@ def main():
                     duration = row['Duration']
                     distance = distance_convertor(row[distance_key])
                     start_time = datetime.strptime(str(row['Date']), "%Y-%m-%d %H:%M:%S")
-                    strava_activity_type = activity_translator(str(row['Type']))
+                    strava_activity_type = activity_translator(act_type)
                     notes = row['Notes']
 
                     if strava_activity_type is not None:
@@ -380,7 +382,7 @@ def main():
                             completed_activities.append(activity_id)
                             activity_counter = increment_activity_counter(activity_counter)
                     else:
-                        logger.info('Invalid activity type ' + str(row['Type']) + ', skipping')
+                        logger.info('Invalid activity type ' + act_type + ', skipping')
 
                 else:
                     logger.warning('Activity [' + activity_id + '] should already be processed')
