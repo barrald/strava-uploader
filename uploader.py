@@ -393,5 +393,5 @@ class RunkeeperToStravaImporter:
 
 
 if __name__ == '__main__':
-    importer = RunkeeperToStravaImporter
+    importer = RunkeeperToStravaImporter()
     importer.run()
