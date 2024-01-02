@@ -163,12 +163,43 @@ def get_date_range(time, hour_buffer=12):
         'to': time + timedelta(hours=hour_buffer),
     }
 
+class StravaClientUtils:
+    @staticmethod
+    def get_client():
+        token = StravaClientUtils.get_strava_access_token()
+        if not token:
+            logger.error('Access token not found. Please set the env variable STRAVA_UPLOADER_TOKEN')
+            exit(1)
+
+        rate_limiter = RateLimiter()
+        rate_limiter.rules.append(XRateLimitRule(
+            {'short': {'usageFieldIndex': 0, 'usage': 0,
+                       # 60s * 15 = 15 min
+                       'limit': 100, 'time': FIFTEEN_MINUTES,
+                       'lastExceeded': None, },
+             'long': {'usageFieldIndex': 1, 'usage': 0,
+                      # 60s * 60m * 24 = 1 day
+                      'limit': 1000, 'time': ONE_DAY,
+                      'lastExceeded': None}}))
+        client = Client(rate_limiter=rate_limiter)
+        client.access_token = token
+        return client
+
+    @staticmethod
+    def get_strava_access_token():
+        access_token = os.environ.get('STRAVA_UPLOADER_TOKEN')
+        if access_token is not None:
+            logger.info('Found access token')
+            return access_token
+        return None
+
 
 class RunkeeperToStravaImporter:
     def __init__(self):
         Setup.set_up_env_vars()
         Setup.set_up_logger()
-        self.client = self.get_strava_client()
+        self.client = StravaClientUtils.get_client()
+
 
     def run(self):
         cardio_file = FileUtils.get_cardio_file()
@@ -307,31 +338,6 @@ class RunkeeperToStravaImporter:
         FileUtils.archive_file(gpxfile)
         return True
 
-    def get_strava_client(self):
-        token = self.get_strava_access_token()
-        rate_limiter = RateLimiter()
-        rate_limiter.rules.append(XRateLimitRule(
-            {'short': {'usageFieldIndex': 0, 'usage': 0,
-                       # 60s * 15 = 15 min
-                       'limit': 100, 'time': FIFTEEN_MINUTES,
-                       'lastExceeded': None, },
-             'long': {'usageFieldIndex': 1, 'usage': 0,
-                      # 60s * 60m * 24 = 1 day
-                      'limit': 1000, 'time': ONE_DAY,
-                      'lastExceeded': None}}))
-        client = Client(rate_limiter=rate_limiter)
-        client.access_token = token
-        return client
-
-    def get_strava_access_token(self):
-        access_token = os.environ.get('STRAVA_UPLOADER_TOKEN')
-        if access_token is not None:
-            logger.info('Found access token')
-            return access_token
-
-        logger.error('Access token not found. Please set the env variable STRAVA_UPLOADER_TOKEN')
-        exit(1)
-
     def create_activity(self, client, activity_id, duration, distance, start_time, strava_activity_type, notes):
         # convert to total time in seconds
         duration = Conversion.duration_calc(duration)
@@ -363,7 +369,8 @@ class RunkeeperToStravaImporter:
             logger.error("No Internet connection: {}".format(err))
             exit(1)
 
-    def activity_exists(self, client, activity_name, start_time):
+    @staticmethod
+    def activity_exists(client, activity_name, start_time):
         date_range = get_date_range(start_time)
 
         logger.debug("Getting existing activities from [%s] to [%s]", date_range['from'].isoformat(), date_range[
