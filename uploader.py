@@ -165,16 +165,18 @@ def get_date_range(time, hour_buffer=12):
 
 
 class RunkeeperToStravaImporter:
-    def run(self):
+    def __init__(self):
         Setup.set_up_env_vars()
         Setup.set_up_logger()
+        self.client = self.get_strava_client()
+
+    def run(self):
         cardio_file = FileUtils.get_cardio_file()
-        client = self.get_strava_client()
 
         logger.debug('Connecting to Strava')
         for i in range(2):
             try:
-                athlete = client.get_athlete()
+                athlete = self.client.get_athlete()
             except exc.RateLimitExceeded:
                 if i > 0:
                     logger.error("Daily Rate limit exceeded - exiting program")
@@ -204,13 +206,13 @@ class RunkeeperToStravaImporter:
 
             for row in activities:
                 # if there is a gpx file listed, find it and upload it
+                gpx_file = row['GPX File']
                 if ".gpx" in gpx_file:
-                    gpx_file = row['GPX File']
                     act_type = str(row['Type'])
                     strava_activity_type = RunkeeperToStravaImporter.activity_translator(act_type)
 
                     if strava_activity_type is not None:
-                        if self.upload_gpx(client, gpx_file, strava_activity_type, row['Notes']):
+                        if self.upload_gpx(gpx_file, strava_activity_type, row['Notes']):
                             activity_counter += 1
                     else:
                         logger.info('Invalid activity type %s, skipping file ', act_type, gpx_file)
@@ -229,7 +231,7 @@ class RunkeeperToStravaImporter:
 
                         if strava_activity_type is not None:
                             if self.create_activity(client, activity_id, duration, distance, start_time, strava_activity_type,
-                                               notes):
+                                                    notes):
                                 completed_activities.add(activity_id)
                                 activity_counter += 1
                         else:
@@ -240,7 +242,7 @@ class RunkeeperToStravaImporter:
     
             logger.info("Complete! Created approximately [%s] activities.", str(activity_counter))
 
-    def upload_gpx(self, client, gpxfile, strava_activity_type, notes):
+    def upload_gpx(self, gpxfile, strava_activity_type, notes):
         if not os.path.isfile(os.path.join(DATA_ROOT_DIR, gpxfile)):
             logger.warning("No file found for %s!", gpxfile)
             return False
@@ -249,7 +251,7 @@ class RunkeeperToStravaImporter:
 
         for i in range(2):
             try:
-                upload = client.upload_activity(
+                upload = self.client.upload_activity(
                     activity_file=open(gpxfile, 'r'),
                     data_type='gpx',
                     private=False,
