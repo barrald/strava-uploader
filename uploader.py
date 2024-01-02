@@ -129,15 +129,15 @@ class FileUtils:
             return
 
         logger.info('Backing up [%s] to [%s]', file, archive_dir)
-        shutil.copy(file, archive_dir)
+        shutil.move(file, archive_dir)
 
     @staticmethod
     def skip_file(file):
         if not os.path.isdir(skip_dir):
             os.mkdir(skip_dir)
 
-        logger.info('Skipping [%s], copying to [%s]', file, skip_dir)
-        shutil.copy(file, skip_dir)
+        logger.info('Skipping [%s], moving to [%s]', file, skip_dir)
+        shutil.move(file, skip_dir)
 
     @staticmethod
     def get_cardio_file():
