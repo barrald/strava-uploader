@@ -334,7 +334,7 @@ def main():
     with cardio_file as csvfile:
         activities = csv.DictReader(csvfile)
         activity_counter = 0
-        completed_activities = []
+        completed_activities = set()
         distance_converter = None
         distance_key = None
 
@@ -374,7 +374,7 @@ def main():
                     if strava_activity_type is not None:
                         if create_activity(client, activity_id, duration, distance, start_time, strava_activity_type,
                                            notes):
-                            completed_activities.append(activity_id)
+                            completed_activities.add(activity_id)
                             activity_counter += 1
                     else:
                         logger.info('Invalid activity type %s, skipping', act_type)
