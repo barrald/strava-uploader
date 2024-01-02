@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import uuid
 
 from dotenv import load_dotenv
 from stravalib import Client, exc
@@ -12,6 +13,8 @@ import time
 from datetime import datetime, timedelta
 import logging
 import sys
+
+DRY_RUN_PREFIX = "[DRY RUN] "
 
 FIFTEEN_MINUTES = 60 * 15
 ONE_DAY = 60 * 60 * 24
@@ -47,6 +50,8 @@ activity_translations = {
 # https://stackoverflow.com/a/35904211/1106893
 this = sys.modules[__name__]
 logger: logging.Logger = None
+
+DRY_RUN = True
 
 
 class Conversion:
@@ -120,7 +125,11 @@ class Setup:
 
 class FileUtils:
     @staticmethod
-    def archive_file(file):
+    def archive_file(file, dry_run=False):
+        if dry_run:
+            logger.info((DRY_RUN_PREFIX + "Archiving file, moving '%s' to dir '%s'"), file, archive_dir)
+            return
+
         if not os.path.isdir(archive_dir):
             os.mkdir(archive_dir)
 
@@ -132,7 +141,11 @@ class FileUtils:
         shutil.move(file, archive_dir)
 
     @staticmethod
-    def skip_file(file):
+    def skip_file(file, dry_run=False):
+        if dry_run:
+            logger.info(DRY_RUN_PREFIX + "Skipping file, moving '%s' to dir '%s'", file, skip_dir)
+            return
+
         if not os.path.isdir(skip_dir):
             os.mkdir(skip_dir)
 
@@ -223,7 +236,7 @@ def rate_limited(retries=2, sleep=900):
         def f_retry(*args, **kwargs):
             for i in range(retries):
                 try:
-                    if f.__func__:
+                    if hasattr(f, "__func__"):
                         # staticmethod or classmethod
                         return f.__func__(*args, **kwargs)
                     else:
@@ -238,6 +251,25 @@ def rate_limited(retries=2, sleep=900):
     return deco_retry
 
 
+class FakeUpload:
+    def wait(self):
+        class Object(object):
+            pass
+
+        obj = Object()
+        obj.id = uuid.uuid4()
+        return obj
+
+
+class FakeAthlete:
+    @property
+    def firstname(self):
+        return "John"
+
+    @property
+    def lastname(self):
+        return "Doe"
+
 class RunkeeperToStravaImporter:
     def __init__(self):
         Setup.set_up_env_vars()
@@ -246,13 +278,21 @@ class RunkeeperToStravaImporter:
         self.activity_counter = 0
         self.completed_activities = set()
         self.distance_mode = None
+        self.dry_run = DRY_RUN
 
     @rate_limited()
     def _get_athlete(self):
+        if self.dry_run:
+            logger.info(DRY_RUN_PREFIX + "Getting athlete")
+            return FakeAthlete()
         return self.client.get_athlete()
 
     @rate_limited()
     def _upload_activity(self, gpx_file, notes, activity_type):
+        if self.dry_run:
+            logger.info(DRY_RUN_PREFIX + "Uploading activity from GPX file: %s, activity type: %s, notes: %s", gpx_file, activity_type, notes)
+            return FakeUpload()
+
         upload = self.client.upload_activity(
             activity_file=open(gpx_file, 'r'),
             data_type='gpx',
@@ -261,6 +301,22 @@ class RunkeeperToStravaImporter:
             activity_type=activity_type
         )
         return upload
+
+    def _create_activity(self, activity_id, activity_name, activity_type, distance, duration, notes, start_time):
+        if self.dry_run:
+            logger.info(DRY_RUN_PREFIX + "Creating activity. ID: %s, name: %s, type: %s, distance: %s, duration: %s, notes: %s, start time: %s",
+                        activity_id, activity_name, activity_type, distance, duration, notes, start_time)
+            return object()
+
+        self.client.create_activity(
+            name=activity_name,
+            start_date_local=start_time,
+            elapsed_time=duration,
+            distance=distance,
+            description=notes,
+            activity_type=activity_type
+        )
+        logger.debug("Manually created %s", activity_id)
 
     @rate_limited()
     def _wait_for_upload(self, upload):
@@ -290,13 +346,13 @@ class RunkeeperToStravaImporter:
                             self.activity_counter += 1
                     else:
                         logger.info('Invalid activity type %s, skipping file %s', raw_activity_type, gpx_file)
-                        FileUtils.skip_file(gpx_file)
+                        FileUtils.skip_file(gpx_file, dry_run=self.dry_run)
 
                 # if no gpx file, upload the data from the CSV
                 else:
                     self._create_activity_from_csv(raw_activity_type, row)
 
-            logger.info("Complete! Created %dn activities.", self.activity_counter)
+            logger.info("Complete! Created %d activities.", self.activity_counter)
 
     def _create_activity_from_csv(self, act_type, row):
         activity_id = row['Activity Id']
@@ -322,16 +378,14 @@ class RunkeeperToStravaImporter:
             logger.warning("No file found for %s!", gpxfile)
             return False
 
-        logger.debug("Uploading %s", gpxfile)
-        upload = self._upload_activity(gpxfile, notes, strava_activity_type)
-        logger.info("Upload succeeded. Waiting for response...")
+        upload = self._upload(gpxfile, notes, strava_activity_type)
 
         try:
             up_result = self._wait_for_upload(upload)
         except exc.ActivityUploadFailed as err:
             # deal with duplicate type of error, if duplicate then continue with next file, stop otherwise
             if str(err).find('duplicate of activity'):
-                FileUtils.archive_file(gpxfile)
+                FileUtils.archive_file(gpxfile, dry_run=self.dry_run)
                 logger.debug("Duplicate File %s", gpxfile)
                 return True
             else:
@@ -345,8 +399,15 @@ class RunkeeperToStravaImporter:
             exit(1)
 
         logger.info("Uploaded %s - Activity id: %s", gpxfile, str(up_result.id))
-        FileUtils.archive_file(gpxfile)
+        FileUtils.archive_file(gpxfile, dry_run=self.dry_run)
         return True
+
+    def _upload(self, gpxfile, notes, strava_activity_type):
+        prefix = DRY_RUN_PREFIX if self.dry_run else ""
+        logger.info(prefix + "Uploading %s", gpxfile)
+        upload = self._upload_activity(gpxfile, notes, strava_activity_type)
+        logger.info(prefix + "Upload succeeded. Waiting for response...")
+        return upload
 
     def create_activity(self, activity_id, duration, distance, start_time, activity_type, notes):
         # convert to total time in seconds
@@ -359,31 +420,26 @@ class RunkeeperToStravaImporter:
             logger.warning('Activity [%s] already created, skipping', activity_name)
             return
 
-        logger.info("Manually uploading [%s]:[%s]", activity_id, activity_name)
+        prefix = DRY_RUN_PREFIX if self.dry_run else ""
+        logger.info(prefix + "Manually uploading [%s]:[%s]", activity_id, activity_name)
 
         try:
-            upload = self.client.create_activity(
-                name=activity_name,
-                start_date_local=start_time,
-                elapsed_time=duration,
-                distance=distance,
-                description=notes,
-                activity_type=activity_type
-            )
-
-            logger.debug("Manually created %s", activity_id)
+            self._create_activity(activity_id, activity_name, activity_type, distance, duration, notes, start_time)
             return True
-
         except ConnectionError as err:
             logger.error("No Internet connection: {}".format(err))
             exit(1)
 
     def activity_exists(self, activity_name, start_time):
         date_range = get_date_range(start_time)
+        date_from = date_range['from'].isoformat()
+        date_to = date_range['to'].isoformat()
 
-        logger.debug("Getting existing activities from [%s] to [%s]", date_range['from'].isoformat(), date_range[
-            'to'].isoformat())
+        if self.dry_run:
+            logger.info(DRY_RUN_PREFIX + "Getting existing activities from [%s] to [%s]", date_from, date_to)
+            return False
 
+        logger.debug("Getting existing activities from [%s] to [%s]", date_from, date_to)
         activities = self.client.get_activities(
             before=date_range['to'],
             after=date_range['from']
