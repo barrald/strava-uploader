@@ -282,39 +282,40 @@ class RunkeeperToStravaImporter:
                 # if there is a gpx file listed, find it and upload it
                 gpx_file = row['GPX File']
                 if ".gpx" in gpx_file:
-                    act_type = str(row['Type'])
-                    strava_activity_type = RunkeeperToStravaImporter.activity_translator(act_type)
+                    raw_activity_type = str(row['Type'])
+                    activity_type = RunkeeperToStravaImporter.activity_translator(raw_activity_type)
 
-                    if strava_activity_type is not None:
-                        if self.upload_gpx(gpx_file, strava_activity_type, row['Notes']):
+                    if activity_type is not None:
+                        if self.upload_gpx(gpx_file, activity_type, row['Notes']):
                             self.activity_counter += 1
                     else:
-                        logger.info('Invalid activity type %s, skipping file ', act_type, gpx_file)
+                        logger.info('Invalid activity type %s, skipping file %s', raw_activity_type, gpx_file)
                         FileUtils.skip_file(gpx_file)
 
                 # if no gpx file, upload the data from the CSV
                 else:
-                    activity_id = row['Activity Id']
+                    self._create_activity_from_csv(raw_activity_type, row)
 
-                    if activity_id not in self.completed_activities:
-                        duration = row['Duration']
-                        distance = self.distance_mode.convert_distance(row)
-                        start_time = datetime.strptime(str(row['Date']), "%Y-%m-%d %H:%M:%S")
-                        strava_activity_type = self.activity_translator(act_type)
-                        notes = row['Notes']
+            logger.info("Complete! Created %dn activities.", self.activity_counter)
 
-                        if strava_activity_type is not None:
-                            if self.create_activity(activity_id, duration, distance, start_time, strava_activity_type,
-                                                    notes):
-                                self.completed_activities.add(activity_id)
-                                self.activity_counter += 1
-                        else:
-                            logger.info('Invalid activity type %s, skipping', act_type)
+    def _create_activity_from_csv(self, act_type, row):
+        activity_id = row['Activity Id']
+        if activity_id not in self.completed_activities:
+            duration = row['Duration']
+            notes = row['Notes']
+            distance = self.distance_mode.convert_distance(row)
+            start_time = datetime.strptime(str(row['Date']), "%Y-%m-%d %H:%M:%S")
+            activity_type = self.activity_translator(act_type)
 
-                    else:
-                        logger.warning('Activity [%s] should already be processed', activity_id)
-    
-            logger.info("Complete! Created approximately [%s] activities.", self.activity_counter)
+            if activity_type is not None:
+                if self.create_activity(activity_id, duration, distance, start_time, activity_type, notes):
+                    self.completed_activities.add(activity_id)
+                    self.activity_counter += 1
+            else:
+                logger.info('Invalid activity type %s, skipping', act_type)
+
+        else:
+            logger.warning('Activity \'%s\' should already be processed', activity_id)
 
     def upload_gpx(self, gpxfile, strava_activity_type, notes):
         if not os.path.isfile(os.path.join(DATA_ROOT_DIR, gpxfile)):
@@ -347,11 +348,11 @@ class RunkeeperToStravaImporter:
         FileUtils.archive_file(gpxfile)
         return True
 
-    def create_activity(self, activity_id, duration, distance, start_time, strava_activity_type, notes):
+    def create_activity(self, activity_id, duration, distance, start_time, activity_type, notes):
         # convert to total time in seconds
         duration = Conversion.duration_calc(duration)
         day_part = Conversion.strava_day_conversion(start_time.hour)
-        activity_name = day_part + " " + strava_activity_type + " (Manual)"
+        activity_name = day_part + " " + activity_type + " (Manual)"
 
         # Check to ensure the manual activity has not already been created
         if self.activity_exists(activity_name, start_time):
@@ -367,7 +368,7 @@ class RunkeeperToStravaImporter:
                 elapsed_time=duration,
                 distance=distance,
                 description=notes,
-                activity_type=strava_activity_type
+                activity_type=activity_type
             )
 
             logger.debug("Manually created %s", activity_id)
