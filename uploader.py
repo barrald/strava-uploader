@@ -48,6 +48,7 @@ activity_translations = {
 this = sys.modules[__name__]
 logger: logging.Logger = None
 
+
 class Conversion:
     @staticmethod
     def miles_to_meters(miles):
@@ -56,6 +57,40 @@ class Conversion:
     @staticmethod
     def km_to_meters(km):
         return float(km) * 1000
+
+    @staticmethod
+    def duration_calc(duration):
+        """
+        Function to convert the HH:MM:SS in the Runkeeper CSV to seconds
+        """
+        # Splits the duration on the :, so we wind up with a 3-part array
+        split_duration = str(duration).split(":")
+        # If the array only has 2 elements, we know the activity was less than an hour
+        if len(split_duration) == 2:
+            hours = 0
+            minutes = int(split_duration[0])
+            seconds = int(split_duration[1])
+        else:
+            hours = int(split_duration[0])
+            minutes = int(split_duration[1])
+            seconds = int(split_duration[2])
+
+        total_seconds = seconds + (minutes * 60) + (hours * 60 * 60)
+        return total_seconds
+
+    @staticmethod
+    def strava_day_conversion(hour_of_day):
+        """
+        designates part of day for name assignment, matching Strava convention for GPS activities
+        """
+        if 3 <= hour_of_day <= 11:
+            return "Morning"
+        elif 12 <= hour_of_day <= 4:
+            return "Afternoon"
+        elif 5 <= hour_of_day <= 7:
+            return "Evening"
+
+        return "Night"
 
 
 def set_up_logger():
@@ -129,24 +164,6 @@ def skip_file(file):
 
     logger.info('Skipping [%s], moving to [%s]', file, skip_dir)
     shutil.move(file, skip_dir)
-
-
-# Function to convert the HH:MM:SS in the Runkeeper CSV to seconds
-def duration_calc(duration):
-    # Splits the duration on the :, so we wind up with a 3-part array
-    split_duration = str(duration).split(":")
-    # If the array only has 2 elements, we know the activity was less than an hour
-    if len(split_duration) == 2:
-        hours = 0
-        minutes = int(split_duration[0])
-        seconds = int(split_duration[1])
-    else:
-        hours = int(split_duration[0])
-        minutes = int(split_duration[1])
-        seconds = int(split_duration[2])
-
-    total_seconds = seconds + (minutes * 60) + (hours * 60 * 60)
-    return total_seconds
 
 
 # Translate RunKeeper's activity codes to Strava's
@@ -231,17 +248,6 @@ def upload_gpx(client, gpxfile, strava_activity_type, notes):
     return True
 
 
-# designates part of day for name assignment, matching Strava convention for GPS activities
-def strava_day_conversion(hour_of_day):
-    if 3 <= hour_of_day <= 11:
-        return "Morning"
-    elif 12 <= hour_of_day <= 4:
-        return "Afternoon"
-    elif 5 <= hour_of_day <= 7:
-        return "Evening"
-
-    return "Night"
-
 
 # Get a small range of time. Note runkeeper does not maintain timezone
 # in the CSV, so we must get about 12 hours earlier and later to account
@@ -276,9 +282,8 @@ def activity_exists(client, activity_name, start_time):
 
 def create_activity(client, activity_id, duration, distance, start_time, strava_activity_type, notes):
     # convert to total time in seconds
-    duration = duration_calc(duration)
-
-    day_part = strava_day_conversion(start_time.hour)
+    duration = Conversion.duration_calc(duration)
+    day_part = Conversion.strava_day_conversion(start_time.hour)
 
     activity_name = day_part + " " + strava_activity_type + " (Manual)"
 
@@ -305,9 +310,6 @@ def create_activity(client, activity_id, duration, distance, start_time, strava_
     except ConnectionError as err:
         logger.error("No Internet connection: {}".format(err))
         exit(1)
-
-
-
 
 
 def main():
