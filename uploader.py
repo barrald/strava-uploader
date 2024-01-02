@@ -68,7 +68,7 @@ def get_cardio_file():
     if os.path.isfile(cardio_file):
         return open(cardio_file)
 
-    logger.error(cardio_file + ' file cannot be found')
+    logger.error('%s file cannot be found', cardio_file)
     exit(1)
 
 
@@ -104,10 +104,10 @@ def archive_file(file):
         os.mkdir(archive_dir)
 
     if os.path.isfile(archive_dir + '/' + file):
-        logger.warning('[' + file + '] already exists in [' + archive_dir + ']')
+        logger.warning('[%s] already exists in [%s]', file, archive_dir)
         return
 
-    logger.info('Backing up [' + file + '] to [' + archive_dir + ']')
+    logger.info('Backing up [%s] to [%s]', file, archive_dir)
     shutil.move(file, archive_dir)
 
 
@@ -115,7 +115,7 @@ def skip_file(file):
     if not os.path.isdir(skip_dir):
         os.mkdir(skip_dir)
 
-    logger.info('Skipping [' + file + '], moving to [' + skip_dir + ']')
+    logger.info('Skipping [%s], moving to [%s]', file, skip_dir)
     shutil.move(file, skip_dir)
 
 
@@ -155,10 +155,10 @@ def increment_activity_counter(counter):
 
 def upload_gpx(client, gpxfile, strava_activity_type, notes):
     if not os.path.isfile(os.path.join(DATA_ROOT_DIR, gpxfile)):
-        logger.warning("No file found for " + gpxfile + "!")
+        logger.warning("No file found for %s!", gpxfile)
         return False
 
-    logger.debug("Uploading " + gpxfile)
+    logger.debug("Uploading %s", gpxfile)
 
     for i in range(2):
         try:
@@ -181,7 +181,7 @@ def upload_gpx(client, gpxfile, strava_activity_type, notes):
             exit(1)
         break
 
-    logger.info("Upload succeeded.\nWaiting for response...")
+    logger.info("Upload succeeded. Waiting for response...")
 
     for i in range(2):
         try:
@@ -201,20 +201,20 @@ def upload_gpx(client, gpxfile, strava_activity_type, notes):
             # deal with duplicate type of error, if duplicate then continue with next file, else stop
             if errStr.find('duplicate of activity'):
                 archive_file(gpxfile)
-                logger.debug("Duplicate File " + gpxfile)
+                logger.debug("Duplicate File %s", gpxfile)
                 return True
             else:
                 logger.error("Another ActivityUploadFailed error: {}".format(err))
                 exit(1)
         except Exception as err:
             try:
-                logger.error("Problem raised: {}\nExiting...".format(err))
+                logger.error("Exception raised: {}\nExiting...".format(err))
             except:
-                logger.error("Problem raised: An error that was not specified, sorry\nExiting...")
+                logger.error("Exception raised: An error that was not specified, sorry\nExiting...")
             exit(1)
         break
 
-    logger.info("Uploaded " + gpxfile + " - Activity id: " + str(up_result.id))
+    logger.info("Uploaded %s - Activity id: %s", gpxfile, str(up_result.id))
     archive_file(gpxfile)
     return True
 
@@ -247,8 +247,8 @@ def get_date_range(time, hour_buffer=12):
 def activity_exists(client, activity_name, start_time):
     date_range = get_date_range(start_time)
 
-    logger.debug("Getting existing activities from [" + date_range['from'].isoformat() + "] to [" + date_range[
-        'to'].isoformat() + "]")
+    logger.debug("Getting existing activities from [%s] to [%s]", date_range['from'].isoformat(), date_range[
+        'to'].isoformat())
 
     activities = client.get_activities(
         before=date_range['to'],
@@ -272,10 +272,10 @@ def create_activity(client, activity_id, duration, distance, start_time, strava_
 
     # Check to ensure the manual activity has not already been created
     if activity_exists(client, activity_name, start_time):
-        logger.warning('Activity [' + activity_name + '] already created, skipping')
+        logger.warning('Activity [%s] already created, skipping', activity_name)
         return
 
-    logger.info("Manually uploading [" + activity_id + "]:[" + activity_name + "]")
+    logger.info("Manually uploading [%s]:[%s]", activity_id, activity_name)
 
     try:
         upload = client.create_activity(
@@ -287,7 +287,7 @@ def create_activity(client, activity_id, duration, distance, start_time, strava_
             activity_type=strava_activity_type
         )
 
-        logger.debug("Manually created " + activity_id)
+        logger.debug("Manually created %s", activity_id)
         return True
 
     except ConnectionError as err:
@@ -324,7 +324,7 @@ def main():
             continue
         break
 
-    logger.info("Now authenticated for " + athlete.firstname + " " + athlete.lastname)
+    logger.info("Now authenticated for %s %s", athlete.firstname, athlete.lastname)
 
     # We open the cardioactivities CSV file and start reading through it
     with cardio_file as csvfile:
@@ -354,7 +354,7 @@ def main():
                     if upload_gpx(client, gpxfile, strava_activity_type, row['Notes']):
                         activity_counter = increment_activity_counter(activity_counter)
                 else:
-                    logger.info('Invalid activity type ' + act_type + ', skipping file ' + gpxfile)
+                    logger.info('Invalid activity type %s, skipping file ', act_type, gpxfile)
                     skip_file(gpxfile)
 
             # if no gpx file, upload the data from the CSV
@@ -374,12 +374,12 @@ def main():
                             completed_activities.append(activity_id)
                             activity_counter = increment_activity_counter(activity_counter)
                     else:
-                        logger.info('Invalid activity type ' + act_type + ', skipping')
+                        logger.info('Invalid activity type %s, skipping', act_type)
 
                 else:
-                    logger.warning('Activity [' + activity_id + '] should already be processed')
+                    logger.warning('Activity [%s] should already be processed', activity_id)
 
-        logger.info("Complete! Created approximately [" + str(activity_counter) + "] activities.")
+        logger.info("Complete! Created approximately [%s] activities.", str(activity_counter))
 
 
 def set_up_env_vars():
