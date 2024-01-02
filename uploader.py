@@ -19,11 +19,9 @@ import sys
 # You need to run the strava_local_client.py script, with your application's ID and secret,
 # to generate the access token.
 #
-# When you have the access token, you can
-#   (a) set an environment variable `STRAVA_UPLOADER_TOKEN` or;
-#   (b) replace `None` below with the token in quote marks, e.g. access_token = 'token'
+# When you have the access token, you need to add it to <project_root>/.env, like:
+#   STRAVA_UPLOADER_TOKEN=<your token>
 #####################################
-access_token = None
 
 DATA_ROOT_DIR = "runkeeper-data"
 cardio_file = os.path.join(DATA_ROOT_DIR, 'cardioActivities.csv')
@@ -75,12 +73,6 @@ def get_cardio_file():
 
 
 def get_strava_access_token():
-    global access_token
-
-    if access_token is not None:
-        logger.info('Found access token')
-        return access_token
-
     access_token = os.environ.get('STRAVA_UPLOADER_TOKEN')
     if access_token is not None:
         logger.info('Found access token')
