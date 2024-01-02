@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 import os
+
+from dotenv import load_dotenv
 from stravalib import Client, exc
 from stravalib.util.limiter import RateLimiter, XRateLimitRule
 from requests.exceptions import ConnectionError
@@ -293,6 +295,7 @@ def km_to_meters(km):
 	return float(km) * 1000
 
 def main():
+	set_up_env_vars()
 	set_up_logger()
 
 	cardio_file = get_cardio_file()
@@ -365,6 +368,12 @@ def main():
 					logger.warning('Activity [' + activity_id + '] should already be processed')
 
 		logger.info("Complete! Created approximately [" + str(activity_counter) + "] activities.")
+
+
+def set_up_env_vars():
+	dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+	load_dotenv(dotenv_path)
+
 
 if __name__ == '__main__':
 	main()
