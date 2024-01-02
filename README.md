@@ -9,10 +9,8 @@ Borrows liberally from @anthonywu's [Strava API Experiment](https://github.com/a
 1. **Get data from Runkeeper**<br>Next, you need to **get your data from Runkeeper.** Go to the Settings page, and look for "Export Data" near the bottom. Define your time range, wait a minute or two, and then click download. Unzip the file - the directory should have .gpx files for all of your GPS-tracked runs, and two spreadsheets - "measurements.csv" and "cardio_activities.csv".
 1. **Navigate to folder**<br>Open a shell (accessed by using the "Terminal" application on MacOS) and `cd` to the data directory (the folder you just downloaded - should be something like "runkeeper-data-export-1234567").
 1. **Install requirements**<br>Install the requirements - from any shell run `pip install -r requirements.txt`
-1. **Get authorization from Strava**<br>Next, we need to **get an Authorization Token from Strava** for your Athlete account. Run the command `python strava_local_client.py get_write_token <client_id> <client_secret>` where you replace `<client_id>` and `<client_secret>` with the codes you pulled from the [Strava API Management Page](https://www.strava.com/settings/api). It should open a browser and ask you to log in to Strava. You should then be shown a code - copy this, and either:
-	1. (Preferably) Set the environment variable `STRAVA_UPLOADER_TOKEN` before running `uploader.py`, e.g. `STRAVA_UPLOADER_TOKEN=my_token ./uploader.py`
-	1. Or paste it in the `uploader.py` file as the `access_token` variable, replacing `None`. Don't forget to quote the variable, e.g. `access_token = "my_token"`
-1. **Upload to Strava**<br>Now we're ready to upload. Run `STRAVA_UPLOADER_TOKEN=my_token ./uploader.py` and let it run!
+1. **Get authorization from Strava**<br>Next, we need to **get an Authorization Token from Strava** for your Athlete account. <br>Make sure to add `CLIENT_ID=<your_client_id>` and `CLIENT_SECRET=<your_client_secret>` to the file `.venv`, with the codes you pulled from the [Strava API Management Page](https://www.strava.com/settings/api) <br>Run the command `python strava_local_client.py get_write_token`. It should open a browser and ask you to log in to Strava. You should then be shown a code - copy this, and add `STRAVA_UPLOADER_TOKEN=<your_code>` to the `.venv` file with the code you received.
+1. **Upload to Strava**<br>Now we're ready to upload. Run `./uploader.py` and let it run!
 
 **A few notes on how this works:**
 - The script will crawl through the cardio activities csv file line for line, uploading each event.
