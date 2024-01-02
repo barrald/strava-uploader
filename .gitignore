@@ -6,3 +6,4 @@ archive
 *.gpx
 venv
 .env
+runkeeper-data
