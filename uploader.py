@@ -23,10 +23,11 @@ import sys
 #####################################
 access_token = None
 
-cardio_file = 'cardioActivities.csv'
+DATA_ROOT_DIR = "runkeeper-data"
+cardio_file = os.path.join(DATA_ROOT_DIR, 'cardioActivities.csv')
 
-archive_dir = 'archive'
-skip_dir = 'skipped'
+archive_dir = os.path.join(DATA_ROOT_DIR, "uploader-output", 'archive')
+skip_dir = os.path.join(DATA_ROOT_DIR, "uploader-output", 'skipped')
 
 # This list can be expanded
 # @see https://developers.strava.com/docs/uploads/#upload-an-activity
@@ -149,7 +150,7 @@ def increment_activity_counter(counter):
 	return counter
 
 def upload_gpx(client, gpxfile, strava_activity_type, notes):
-	if not os.path.isfile(gpxfile):
+	if not os.path.isfile(os.path.join(DATA_ROOT_DIR, gpxfile)):
 		logger.warning("No file found for " + gpxfile + "!")
 		return False
 
