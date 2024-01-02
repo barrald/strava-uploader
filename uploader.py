@@ -177,11 +177,6 @@ def activity_translator(rk_type):
     return activity_translations[rk_type]
 
 
-def increment_activity_counter(counter):
-    counter += 1
-    return counter
-
-
 def upload_gpx(client, gpxfile, strava_activity_type, notes):
     if not os.path.isfile(os.path.join(DATA_ROOT_DIR, gpxfile)):
         logger.warning("No file found for %s!", gpxfile)
@@ -361,7 +356,7 @@ def main():
 
                 if strava_activity_type is not None:
                     if upload_gpx(client, gpxfile, strava_activity_type, row['Notes']):
-                        activity_counter = increment_activity_counter(activity_counter)
+                        activity_counter += 1
                 else:
                     logger.info('Invalid activity type %s, skipping file ', act_type, gpxfile)
                     skip_file(gpxfile)
@@ -381,7 +376,7 @@ def main():
                         if create_activity(client, activity_id, duration, distance, start_time, strava_activity_type,
                                            notes):
                             completed_activities.append(activity_id)
-                            activity_counter = increment_activity_counter(activity_counter)
+                            activity_counter += 1
                     else:
                         logger.info('Invalid activity type %s, skipping', act_type)
 
