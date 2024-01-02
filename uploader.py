@@ -11,8 +11,6 @@ from datetime import datetime, timedelta
 import logging
 import sys
 
-logger = None
-
 #####################################
 # Access Token
 #
@@ -42,9 +40,16 @@ activity_translations = {
 	'swimming': 'swim'
 }
 
+# https://stackoverflow.com/a/35904211/1106893
+this = sys.modules[__name__]
+logger: logging.Logger = None
+
 def set_up_logger():
-	global logger
-	logger = logging.getLogger(__name__)
+	if this.logger is None:
+		this.logger = logging.getLogger(__name__)
+	else:
+		raise RuntimeError("Logger has already been set up.")
+
 	formatter = logging.Formatter('[%(asctime)s] [%(levelname)s]:%(message)s')
 	std_out_handler = logging.StreamHandler(sys.stdout)
 	std_out_handler.setLevel(logging.DEBUG)
