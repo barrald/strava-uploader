@@ -32,6 +32,7 @@ ONE_DAY = 60 * 60 * 24
 DATA_ROOT_DIR = "runkeeper-data"
 cardio_file = os.path.join(DATA_ROOT_DIR, 'cardioActivities.csv')
 
+output_dir = os.path.join(DATA_ROOT_DIR, "uploader-output")
 archive_dir = os.path.join(DATA_ROOT_DIR, "uploader-output", 'archive')
 skip_dir = os.path.join(DATA_ROOT_DIR, "uploader-output", 'skipped')
 
@@ -100,6 +101,15 @@ class Conversion:
 
 class Setup:
     @staticmethod
+    def setup_dirs():
+        if not os.path.isdir(output_dir):
+            os.mkdir(output_dir)
+        if not os.path.isdir(archive_dir):
+            os.mkdir(archive_dir)
+        if not os.path.isdir(skip_dir):
+            os.mkdir(skip_dir)
+
+    @staticmethod
     def set_up_env_vars():
         dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
         load_dotenv(dotenv_path)
@@ -130,9 +140,6 @@ class FileUtils:
             logger.info((DRY_RUN_PREFIX + "Archiving file, moving '%s' to dir '%s'"), file, archive_dir)
             return
 
-        if not os.path.isdir(archive_dir):
-            os.mkdir(archive_dir)
-
         if os.path.isfile(archive_dir + '/' + file):
             logger.warning('[%s] already exists in [%s]', file, archive_dir)
             return
@@ -145,9 +152,6 @@ class FileUtils:
         if dry_run:
             logger.info(DRY_RUN_PREFIX + "Skipping file, moving '%s' to dir '%s'", file, skip_dir)
             return
-
-        if not os.path.isdir(skip_dir):
-            os.mkdir(skip_dir)
 
         logger.info('Skipping [%s], moving to [%s]', file, skip_dir)
         shutil.move(file, skip_dir)
@@ -272,6 +276,7 @@ class FakeAthlete:
 
 class RunkeeperToStravaImporter:
     def __init__(self):
+        Setup.setup_dirs()
         Setup.set_up_env_vars()
         Setup.set_up_logger()
         self.client = StravaClientUtils.get_client()
@@ -345,7 +350,7 @@ class RunkeeperToStravaImporter:
                         if self.upload_gpx(gpx_file, activity_type, row['Notes']):
                             self.activity_counter += 1
                     else:
-                        logger.info('Invalid activity type %s, skipping file %s', raw_activity_type, gpx_file)
+                        logger.error('Invalid activity type %s, skipping file %s', raw_activity_type, gpx_file)
                         FileUtils.skip_file(gpx_file, dry_run=self.dry_run)
 
                 # if no gpx file, upload the data from the CSV
@@ -368,7 +373,7 @@ class RunkeeperToStravaImporter:
                     self.completed_activities.add(activity_id)
                     self.activity_counter += 1
             else:
-                logger.info('Invalid activity type %s, skipping', act_type)
+                logger.error('Invalid activity type %s, skipping', act_type)
 
         else:
             logger.warning('Activity \'%s\' should already be processed', activity_id)
