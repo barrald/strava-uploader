@@ -51,7 +51,7 @@ activity_translations = {
 this = sys.modules[__name__]
 logger: logging.Logger = None
 
-DRY_RUN = True
+DRY_RUN = False
 
 
 class Conversion:
@@ -294,7 +294,7 @@ class RunkeeperToStravaImporter:
             return FakeUpload()
 
         upload = self.client.upload_activity(
-            activity_file=open(gpx_file, 'r'),
+            activity_file=open(os.path.join(DATA_ROOT_DIR, gpx_file), 'r'),
             data_type='gpx',
             private=False,
             description=notes,
