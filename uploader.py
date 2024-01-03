@@ -145,7 +145,7 @@ class FileUtils:
             return
 
         logger.info('Backing up [%s] to [%s]', file, archive_dir)
-        shutil.move(file, archive_dir)
+        shutil.move(os.path.join(DATA_ROOT_DIR, file), archive_dir)
 
     @staticmethod
     def skip_file(file, dry_run=False):
@@ -154,7 +154,7 @@ class FileUtils:
             return
 
         logger.info('Skipping [%s], moving to [%s]', file, skip_dir)
-        shutil.move(file, skip_dir)
+        shutil.move(os.path.join(DATA_ROOT_DIR, file), skip_dir)
 
     @staticmethod
     def get_cardio_file():
@@ -185,7 +185,7 @@ class StravaClientUtils:
     def get_client():
         token = StravaClientUtils.get_strava_access_token()
         if not token:
-            logger.error('Access token not found. Please set the env variable STRAVA_UPLOADER_TOKEN')
+            logger.error('Access token not found in .env file. Please set STRAVA_UPLOADER_TOKEN to a valid value in the file.')
             exit(1)
 
         rate_limiter = RateLimiter()
@@ -383,9 +383,8 @@ class RunkeeperToStravaImporter:
             logger.warning("No file found for %s!", gpxfile)
             return False
 
-        upload = self._upload(gpxfile, notes, strava_activity_type)
-
         try:
+            upload = self._upload(gpxfile, notes, strava_activity_type)
             up_result = self._wait_for_upload(upload)
         except exc.ActivityUploadFailed as err:
             # deal with duplicate type of error, if duplicate then continue with next file, stop otherwise
