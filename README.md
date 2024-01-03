@@ -16,7 +16,7 @@ Borrows liberally from @anthonywu's [Strava API Experiment](https://github.com/a
 - The script will crawl through the cardio activities csv file line by line, uploading each event.
 - Right now it handles runs, rides, walks, swims, hikes and elliptical exercises. You can add more - be sure to grab the RunKeeper definition and the Strava definition and add to the `activity_translator` function.
 - If there is a GPX file listed in the last column, it will look for that file in the directory. If there is no GPX file, it will manually upload using the distance and duration data listed in the spreadsheet.
-- Strava's API [rate-limits you to 200 requests every 15 minutes](https://www.strava.com/settings/api), and 2000 daily requests.
+- Strava's API [rate-limits you to 200 requests every 15 minutes](https://developers.strava.com/docs/rate-limits/), and 2000 daily requests.
 The `uploader.py` script will automatically wait for 15 minutes when the upload count hits 199. This is probably too conservative - feel free to adjust. 
 - It will move successfully uploaded GPX files to a sub-folder called archive.
 - It will try to catch various errors, and ignore duplicate files.
