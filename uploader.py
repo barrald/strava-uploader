@@ -165,7 +165,6 @@ class FileUtils:
         exit(1)
 
 
-
 def get_date_range(time, hour_buffer=12):
     """
     Get a small range of time. Note runkeeper does not maintain timezone
@@ -180,12 +179,14 @@ def get_date_range(time, hour_buffer=12):
         'to': time + timedelta(hours=hour_buffer),
     }
 
+
 class StravaClientUtils:
     @staticmethod
     def get_client():
         token = StravaClientUtils.get_strava_access_token()
         if not token:
-            logger.error('Access token not found in .env file. Please set STRAVA_UPLOADER_TOKEN to a valid value in the file.')
+            logger.error('Access token not found in .env file. '
+                         'Please set STRAVA_UPLOADER_TOKEN to a valid value in the file.')
             exit(1)
 
         rate_limiter = RateLimiter()
@@ -249,7 +250,8 @@ def rate_limited(retries=2, sleep=900):
                     if i > 0:
                         logger.error("Daily Rate limit exceeded - exiting program")
                         exit(1)
-                    logger.warning("Rate limit exceeded in connecting - Retrying strava connection in %d seconds", sleep)
+                    logger.warning("Rate limit exceeded in connecting - "
+                                   "Retrying strava connection in %d seconds", sleep)
                     time.sleep(sleep)
         return f_retry  # true decorator
     return deco_retry
@@ -274,6 +276,7 @@ class FakeAthlete:
     def lastname(self):
         return "Doe"
 
+
 class RunkeeperToStravaImporter:
     def __init__(self):
         Setup.setup_dirs()
@@ -295,7 +298,8 @@ class RunkeeperToStravaImporter:
     @rate_limited()
     def _upload_activity(self, gpx_file, notes, activity_type):
         if self.dry_run:
-            logger.info(DRY_RUN_PREFIX + "Uploading activity from GPX file: %s, activity type: %s, notes: %s", gpx_file, activity_type, notes)
+            logger.info(DRY_RUN_PREFIX + "Uploading activity from GPX file: %s, activity type: %s, notes: %s",
+                        gpx_file, activity_type, notes)
             return FakeUpload()
 
         upload = self.client.upload_activity(
@@ -309,7 +313,8 @@ class RunkeeperToStravaImporter:
 
     def _create_activity(self, activity_id, activity_name, activity_type, distance, duration, notes, start_time):
         if self.dry_run:
-            logger.info(DRY_RUN_PREFIX + "Creating activity. ID: %s, name: %s, type: %s, distance: %s, duration: %s, notes: %s, start time: %s",
+            logger.info(DRY_RUN_PREFIX + "Creating activity. ID: %s, name: %s, type: %s, distance: %s, "
+                                         "duration: %s, notes: %s, start time: %s",
                         activity_id, activity_name, activity_type, distance, duration, notes, start_time)
             return object()
 
