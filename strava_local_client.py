@@ -6,15 +6,17 @@ Strava Development Sandbox.
 Get your *Client ID* and *Client Secret* from https://www.strava.com/settings/api
 
 Usage:
-  strava_local_client.py get_write_token <client_id> <client_secret> [options]
+  strava_local_client.py get_write_token [options]
   strava_local_client.py find_settings
 
 Options:
   -h --help      Show this screen.
   --port=<port>  Local port for OAuth client [default: 8000].
 """
+import os
 
 import stravalib
+from dotenv import load_dotenv
 from flask import Flask, request
 
 app = Flask(__name__)
@@ -44,9 +46,13 @@ if __name__ == '__main__':
     args = docopt.docopt(__doc__)
 
     if args['get_write_token']:
-        CLIENT_ID, CLIENT_SECRET = args['<client_id>'], args['<client_secret>']
+        dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+        load_dotenv(dotenv_path)
+        CLIENT_ID = int(os.environ.get("CLIENT_ID"))
+        CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
+
         auth_url = API_CLIENT.authorization_url(
-            client_id=args['<client_id>'],
+            client_id=CLIENT_ID,
             redirect_uri='http://127.0.0.1:{port}/auth'.format(port=args['--port']),
             scope=['activity:write','activity:read_all','profile:read_all','profile:write','read_all'],
             state='from_cli'

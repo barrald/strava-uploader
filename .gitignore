@@ -5,3 +5,5 @@ archive
 *.pyc
 *.gpx
 venv
+.env
+runkeeper-data
