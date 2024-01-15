@@ -365,6 +365,8 @@ class RunkeeperToStravaImporter:
                 except exc.Fault as e:
                     if e.code == 409:
                         logger.warning('Caught a 409 Client Error: Conflict. This likely means that you have a conflicting activity in Strava in this time block.')
+                    else:
+                        logger.warning(f'Caught a Client Error: {e}')
 
             logger.info("Complete! Created %d activities.", self.activity_counter)
 
