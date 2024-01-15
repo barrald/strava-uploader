@@ -345,22 +345,26 @@ class RunkeeperToStravaImporter:
             self.distance_mode = DistanceMode.from_csv_header(activities.fieldnames)
 
             for row in activities:
-                # if there is a gpx file listed, find it and upload it
-                gpx_file = row['GPX File']
-                if ".gpx" in gpx_file:
-                    raw_activity_type = str(row['Type'])
-                    activity_type = RunkeeperToStravaImporter.activity_translator(raw_activity_type)
+                try:
+                    # if there is a gpx file listed, find it and upload it
+                    gpx_file = row['GPX File']
+                    if ".gpx" in gpx_file:
+                        raw_activity_type = str(row['Type'])
+                        activity_type = RunkeeperToStravaImporter.activity_translator(raw_activity_type)
 
-                    if activity_type is not None:
-                        if self.upload_gpx(gpx_file, activity_type, row['Notes']):
-                            self.activity_counter += 1
+                        if activity_type is not None:
+                            if self.upload_gpx(gpx_file, activity_type, row['Notes']):
+                                self.activity_counter += 1
+                        else:
+                            logger.error('Invalid activity type %s, skipping file %s', raw_activity_type, gpx_file)
+                            FileUtils.skip_file(gpx_file, dry_run=self.dry_run)
+
+                    # if no gpx file, upload the data from the CSV
                     else:
-                        logger.error('Invalid activity type %s, skipping file %s', raw_activity_type, gpx_file)
-                        FileUtils.skip_file(gpx_file, dry_run=self.dry_run)
-
-                # if no gpx file, upload the data from the CSV
-                else:
-                    self._create_activity_from_csv(raw_activity_type, row)
+                        self._create_activity_from_csv(raw_activity_type, row)
+                except exc.Fault as e:
+                    if e.code == 409:
+                        logger.warning('Caught a 409 Client Error: Conflict. This likely means that you have a conflicting activity in Strava in this time block.')
 
             logger.info("Complete! Created %d activities.", self.activity_counter)
 
