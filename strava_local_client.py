@@ -35,7 +35,49 @@ def auth_callback():
         client_secret=CLIENT_SECRET,
         code=code
         )
-    return access_token['access_token']
+    token = access_token['access_token']
+    
+    # Save/update token in .env file
+    dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+    try:
+        with open(dotenv_path, 'r') as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        lines = []
+    
+    # Replace existing token line or add new one
+    token_found = False
+    with open(dotenv_path, 'w') as f:
+        for line in lines:
+            if line.startswith('STRAVA_UPLOADER_TOKEN='):
+                f.write(f"STRAVA_UPLOADER_TOKEN={token}\n")
+                token_found = True
+            else:
+                f.write(line)
+        if not token_found:
+            f.write(f"STRAVA_UPLOADER_TOKEN={token}\n")
+    
+    print(f"\n✓ Access token obtained and saved to .env: {token[:20]}...")
+    
+    # Shutdown the Flask server after saving token
+    import threading
+    def shutdown():
+        import time
+        time.sleep(1)
+        import os
+        os.kill(os.getpid(), 15)
+    threading.Thread(target=shutdown, daemon=True).start()
+    
+    # Return success message
+    return f"""
+    <html>
+    <body style="font-family: Arial; text-align: center; margin-top: 50px;">
+        <h1>✓ Authorization Successful!</h1>
+        <p>Your access token has been saved to <code>.env</code></p>
+        <p>You can close this window. The server will exit automatically.</p>
+    </body>
+    </html>
+    """
 
 
 if __name__ == '__main__':
@@ -62,6 +104,10 @@ if __name__ == '__main__':
             subprocess.call(['open', auth_url])
         else:
             print('Go to {0} to authorize access: '.format(auth_url))
-        app.run(port=int(args['--port']))
+        
+        print(f'\nListening for callback on http://127.0.0.1:{args["--port"]}/auth')
+        print('After authorizing, the token will be saved to .env and the server will exit.\n')
+        
+        app.run(port=int(args['--port']), use_reloader=False)
     elif args['find_settings']:
         subprocess.call(['open', 'https://www.strava.com/settings/api'])
